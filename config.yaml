@@ -48,20 +48,47 @@ training:
   checkpoint_dir: "checkpoints"
 
 
-# Physics-guided & Uncertainty-aware hyper-parameters
+# Physics-guided & Uncertainty-aware hyper-parameters — v2
 hybridbathnet:
   in_channels: 6
   feature_dim: 128
   dropout_rate: 0.1
 
+  # --- v2: Improved QAA Kd ---
   i0_over_epsilon: 100.0   # Signal-to-noise ratio threshold for Beer-Lambert extinction
-  loss_weights:
-    w_mse: 1.0             # Weight for direct Depth Regression MSE Loss
-    w_nll: 1.0             # Weight for heteroscedastic Gaussian NLL loss (Aleatoric Uncertainty)
-    w_phys: 0.5            # Weight for physical non-negativity depth constraint (\hat{y} >= 0)
-    w_ext: 0.5             # Weight for Beer-Lambert optical extinction depth limit (\hat{y} <= z_ext)
+  use_red_kd: true          # Use red band in QAA Kd formula (improves turbid water accuracy)
 
-  mc_samples: 20           # Number of MC Dropout forward passes during uncertainty inference
+  # --- v2: Cross-attention physics fusion ---
+  n_attn_heads: 4           # Number of attention heads in CrossAttentionPhysicsFusion
+  phys_tokens: 4            # Number of physics embedding tokens (richer physics representation)
+
+  # --- v2: Loss weights ---
+  loss_weights:
+    w_mse: 1.0              # Weight for direct Depth Regression MSE Loss
+    w_nll: 1.0              # Weight for heteroscedastic Gaussian NLL loss (Aleatoric Uncertainty)
+    w_phys: 0.5             # Weight for physical non-negativity depth constraint (\hat{y} >= 0)
+    w_ext: 0.5              # Weight for Beer-Lambert optical extinction depth limit (\hat{y} <= z_ext)
+
+  # --- v2: Depth-weighted loss ---
+  use_depth_weighting: true  # Up-weight deep-water samples (harder; less represented)
+  depth_weight_scale: 10.0   # Depth (m) at which sample weight = 1.0
+
+  # --- v2: Curriculum NLL annealing ---
+  nll_warmup_epochs: 20      # Linearly ramp NLL weight from 0 -> w_nll over this many epochs
+                             # Model first learns MSE then gradually calibrates uncertainty
+
+  # --- v2: Training stability ---
+  grad_clip_norm: 1.0        # Max gradient norm (prevents physics loss gradient explosions)
+  lr_restart_period: 30      # CosineAnnealingWarmRestarts T_0 (LR restart interval in epochs)
+
+  # --- v2: Spectral augmentation ---
+  aug_noise_std: 0.02        # Gaussian noise std for spectral jitter augmentation
+
+  # --- v2: Depth-stratified curriculum sampler ---
+  depth_strata: 5            # Number of depth quantile strata for balanced batching
+
+  # --- v2: Uncertainty inference ---
+  mc_samples: 30             # Number of MC Dropout forward passes (increased from 20)
 
 evaluation:
   results_dir: "results"
