@@ -1,99 +1,92 @@
 # HybridBathNet — Physics-Guided & Uncertainty-Aware Ocean Depth Prediction
 
-This repository contains the baseline pipeline and experimental models for **HybridBathNet**: an end-to-end framework for ocean bathymetry (depth prediction) from Sentinel-2 satellite imagery.
+This repository contains the v3 baseline pipeline and model for **HybridBathNet**: an end-to-end framework for satellite-derived bathymetry (ocean depth prediction) from Sentinel-2 imagery, incorporating physics priors, uncertainty quantification, and a dense U-Net architecture.
 
 It includes:
-1. **Stumpf (2003)** empirical log-band ratio regression.
-2. **Random Forest** on spectral bands, band ratios, and NDWI.
-3. **Simple CNN** (encoder-decoder deep learning model without physics constraints).
-4. **HybridBathNet** (Physics-guided & uncertainty-aware hybrid neural network architecture).
+1. **Stumpf (2003)** empirical Lyzenga-feature log-band-ratio regression.
+2. **Random Forest** on Lyzenga bands, band ratios, and NDWI.
+3. **Gradient Boosting** — stronger tabular baseline.
+4. **HybridBathNet v3** — Physics-guided & uncertainty-aware hybrid U-Net.
 
 ---
 
-## ⚡ Quick Start: Commands to Run
+## ⚡ Quick Start
 
 ### 1. Environment Setup
 ```bash
-# Clone the repository (with LFS for model checkpoints)
 git clone https://github.com/mujiishere/HybridBathNet---Physics-Guided-uncertainity-aware-ocean-depth-prediction.git
 cd HybridBathNet---Physics-Guided-uncertainity-aware-ocean-depth-prediction
 git lfs pull
 
-# Create and activate virtual environment
 python -m venv venv
-# On Windows:
-venv\Scripts\activate
-# On Linux/macOS:
-source venv/bin/activate
+# Windows: venv\Scripts\activate
+# Linux/macOS: source venv/bin/activate
 
-# Install dependencies
 pip install -r requirements.txt
 ```
 
-### 2. Run Entire Pipeline (One-Click)
+### 2. Set Copernicus Credentials
+```powershell
+# Windows PowerShell:
+$env:CDSE_USERNAME="your-email@example.com"
+$env:CDSE_PASSWORD="your-password"
+```
 ```bash
-# Run full pipeline (Data Download -> Preprocessing -> Feature Engineering -> Training -> Evaluation)
+# Linux / macOS:
+export CDSE_USERNAME="your-email@example.com"
+export CDSE_PASSWORD="your-password"
+```
+Free account at [dataspace.copernicus.eu](https://dataspace.copernicus.eu).
+
+### 3. Run Full Pipeline
+```bash
+# Real data (downloads required):
 python run_baseline_pipeline.py --config config.yaml
 
-# Or if datasets are already prepared, skip download:
-python run_baseline_pipeline.py --config config.yaml --skip-download
-```
+# Synthetic data (no downloads needed, for testing):
+python run_baseline_pipeline.py --config config.yaml --synthetic
 
-### 3. Run Pipeline with Live Output Monitor
-```bash
-python monitor_and_run.py
+# Skip download if data already present:
+python run_baseline_pipeline.py --config config.yaml --skip-download
+
+# Run with multiple seeds (§8 ablation):
+python run_baseline_pipeline.py --config config.yaml --seed 0
+python run_baseline_pipeline.py --config config.yaml --seed 1
 ```
 
 ---
 
-## 🛠️ Step-by-Step Pipeline Commands
-
-If you prefer to execute each stage individually:
+## 🛠️ Step-by-Step Pipeline
 
 ### Step 1: Download Datasets
-Set your Copernicus credentials (free account at [dataspace.copernicus.eu](https://dataspace.copernicus.eu)):
-```bash
-# Windows (PowerShell):
-$env:CDSE_USERNAME="your-email@example.com"
-$env:CDSE_PASSWORD="your-password"
-
-# Linux/macOS:
-export CDSE_USERNAME="your-email@example.com"
-export CDSE_PASSWORD="your-password"
-```
-
-Download Sentinel-2 L2A scenes:
 ```bash
 python -m src.download_sentinel2 --config config.yaml
-```
-*(Optionally download GEBCO bathymetry NetCDF to `data/raw/gebco/gebco_subset.nc` and run:)*
-```bash
-python -m src.download_gebco --config config.yaml
+python -m src.download_gebco     --config config.yaml
 python -m src.download_coastline --config config.yaml
 ```
 
-### Step 2: Preprocess & Coregister Data
+### Step 2: Preprocess
 ```bash
+# Applies Sentinel-2 L2A BOA offset (§1.3), builds median composite + temporal std
 python -m src.preprocess --config config.yaml
 ```
 
-### Step 3: Feature Engineering & Spatial Splitting
+### Step 3: Feature Engineering
 ```bash
+# Lyzenga channels (§2.1), sun-glint correction (§2.3), mask channel (§2.2),
+# temporal std (§2.4), buffered spatial split (§1.5)
 python -m src.features --config config.yaml
 ```
 
-### Step 4: Train & Evaluate Models
+### Step 4: Train & Evaluate
 ```bash
-# Train Stumpf & Random Forest models
+# Stumpf (Lyzenga) + RandomForest + GradientBoosting
 python -m src.baseline_models --config config.yaml
 
-# Train Simple CNN baseline
+# HybridBathNet v3 (U-Net, FiLM, β-NLL, EMA, AMP, snapshots, calibration)
 python -m src.cnn_baseline --config config.yaml
 
-# Train HybridBathNet model (Physics-Guided & Uncertainty Head)
-python -m src.hybridbathnet --config config.yaml
-
-# Compare all model results (generates comparison table & charts)
+# Comparison table + RMSE/depth-bin/calibration plots
 python -m src.compare_baselines --config config.yaml
 ```
 
@@ -103,57 +96,89 @@ python -m src.compare_baselines --config config.yaml
 
 ```
 hybridbathnet_baseline/
-├── config.yaml                     # Main configuration (AOI, hyperparameters, paths)
+├── config.yaml                     # Hyperparameters, paths, loss weights
 ├── requirements.txt                # Python dependencies
-├── run_baseline_pipeline.py        # End-to-end execution script
-├── monitor_and_run.py              # Automated runner with live monitoring
-├── README.md                       # Documentation
-├── src/                            # Source code modules
+├── run_baseline_pipeline.py        # End-to-end pipeline orchestrator
+├── monitor_and_run.py              # Live monitoring runner
+├── README.md
+├── src/
 │   ├── utils.py                    # Geo utilities & logging
-│   ├── download_sentinel2.py       # CDSE satellite imagery fetcher
-│   ├── download_gebco.py           # GEBCO bathymetry processor
-│   ├── download_coastline.py       # OpenStreetMap coastline downloader
-│   ├── preprocess.py               # Cloud masking, compositing, resampling
-│   ├── features.py                 # Band ratio, NDWI, spatial train/test splits
-│   ├── baseline_models.py          # Stumpf & Random Forest models
-│   ├── cnn_baseline.py             # Simple PyTorch CNN architecture & training
-│   ├── hybridbathnet.py            # Physics-Guided Uncertainty-Aware Hybrid Model
-│   └── compare_baselines.py        # Benchmark results comparison & plots
-├── checkpoints/                    # Pre-trained model weights (Git LFS)
-│   ├── cnn_baseline.pt
-│   ├── hybridbathnet.pt
+│   ├── download_sentinel2.py       # CDSE imagery downloader
+│   ├── download_gebco.py           # GEBCO bathymetry converter
+│   ├── download_coastline.py       # OSM coastline downloader
+│   ├── preprocess.py               # BOA offset, compositing, temporal std
+│   ├── features.py                 # Lyzenga, glint corr., mask, split
+│   ├── baseline_models.py          # Stumpf, RF, GradientBoosting
+│   ├── cnn_baseline.py             # HybridBathNet v3 training loop
+│   ├── hybridbathnet.py            # Model architecture (U-Net + FiLM)
+│   ├── generate_synthetic_data.py  # Synthetic data generator
+│   └── compare_baselines.py        # Benchmark plots & comparison table
+├── checkpoints/                    # Pre-trained weights (Git LFS)
+│   ├── hybridbathnet.pt            # Best EMA checkpoint
+│   ├── hybridbathnet_snapshot_*.pt # Cosine-cycle snapshots (ensemble)
 │   ├── rf_model.joblib
+│   ├── gb_model.joblib
 │   └── stumpf_model.joblib
-├── results/                        # Evaluation metrics & benchmark JSONs
-│   ├── cnn_baseline_results.json
+├── results/                        # Evaluation JSON + CSV + plots
 │   ├── hybridbathnet_results.json
 │   ├── tabular_baseline_results.json
+│   ├── cnn_baseline_results.json
 │   ├── baseline_comparison.csv
-│   └── baseline_comparison.png
-└── outputs/                        # Output visualizations & diagnostic charts
-    ├── sample_cnn_input_patch.png
-    ├── sentinel2_cloud_masking_slide_visualization.png
-    ├── sentinel2_cloudy_scene_bands_visualization.png
-    ├── sentinel2_raw_jp2000_slide_visualization.png
-    └── stack_tif_6bands_visualization.png
+│   ├── baseline_comparison.png
+│   ├── depth_bin_comparison.png
+│   └── uncertainty_calibration.png
+└── outputs/                        # Output rasters & diagnostic charts
 ```
 
 ---
 
-## 📊 Pre-trained Models & Output Results
+## 🔬 v3 Changes at a Glance
 
-Trained checkpoint models are included in `checkpoints/` (tracked via **Git LFS**):
-- **Stumpf Model**: `checkpoints/stumpf_model.joblib`
-- **Random Forest Model**: `checkpoints/rf_model.joblib`
-- **Simple CNN Model**: `checkpoints/cnn_baseline.pt`
-- **HybridBathNet Model**: `checkpoints/hybridbathnet.pt`
-
-Benchmark results are output to `results/` in JSON and CSV formats. Visualizations are saved in `outputs/`.
+| § | Fix | File |
+|---|-----|------|
+| 1.1 | σ in metres (was normalised units) | `cnn_baseline.py`, `hybridbathnet.py` |
+| 1.2 | Kd from real reflectance (not z-scored) | `hybridbathnet.py` |
+| 1.3 | Sentinel-2 L2A BOA offset −1000/10000 | `preprocess.py` |
+| 1.4 | epochs=90 = 3×T_0=30 (no mid-cycle cutoff) | `config.yaml` |
+| 1.5 | Buffered spatial split (no edge leakage) | `features.py` |
+| 2.1 | Lyzenga log-linearised channels | `features.py` |
+| 2.2 | Water/valid mask input channel | `features.py` |
+| 2.3 | NIR sun-glint correction | `features.py` |
+| 2.4 | Temporal std channel (turbidity proxy) | `preprocess.py`, `features.py` |
+| 2.5 | Optional distance-to-shore channel | `features.py` |
+| 3.1 | Dense U-Net output (full H×W maps) | `hybridbathnet.py` |
+| 3.2 | Per-pixel Kd map | `hybridbathnet.py` |
+| 3.3 | FiLM conditioning at every encoder scale | `hybridbathnet.py` |
+| 3.4 | Removed non-physical feature bounding | `hybridbathnet.py` |
+| 3.5 | softplus depth (non-negativity by design) | `hybridbathnet.py` |
+| 3.6 | Optical reconstruction head (self-supervised) | `hybridbathnet.py` |
+| 3.7 | GEBCO-scale pooled loss | `hybridbathnet.py` |
+| 4.1 | One compensation: sampler OR weighting | `cnn_baseline.py`, `config.yaml` |
+| 4.2 | β-NLL (β=0.5, no variance collapse) | `hybridbathnet.py` |
+| 4.3 | Huber instead of MSE for mean term | `hybridbathnet.py` |
+| 4.5 | EMA weights, early stopping | `cnn_baseline.py` |
+| 5.2 | Snapshot ensemble (free, per cycle) | `cnn_baseline.py` |
+| 5.4 | Calibration: NLL, 68/90% cov, sparsification | `hybridbathnet.py`, `cnn_baseline.py` |
+| 5.5 | Conformal recalibration helper | `hybridbathnet.py` |
+| 6.3 | AMP (bfloat16/fp16) training | `cnn_baseline.py` |
+| 7   | Pipeline, compare_baselines, credentials | `run_baseline_pipeline.py`, `compare_baselines.py`, `download_sentinel2.py` |
+| 8   | Tabular: Lyzenga features, bootstrap CI | `baseline_models.py` |
 
 ---
 
-## ⚠️ Notes & Troubleshooting
+## 📊 Results (Baseline, test split vs GEBCO)
 
-- **Large File Storage (Git LFS)**: Pre-trained models (e.g. `rf_model.joblib`) are tracked with `git-lfs`. Ensure `git lfs pull` is run after cloning.
-- **Copernicus Authentication**: Ensure `CDSE_USERNAME` and `CDSE_PASSWORD` environment variables are set before downloading Sentinel-2 data.
-- **GPU Acceleration**: PyTorch will automatically use NVIDIA CUDA GPU if available, otherwise defaulting to CPU.
+| Model | RMSE (m) | R² | ±1 m | ±2 m |
+|-------|----------|-----|------|------|
+| HybridBathNet v1 | 3.618 | — | 20.64% | 41.38% |
+| HybridBathNet v2 | 3.507 | 0.916 | 23.16% | 44.67% |
+| HybridBathNet v3 | *run to measure* | | | |
+
+---
+
+## ⚠️ Notes
+
+- **Security**: Never commit Copernicus credentials. Always use `CDSE_USERNAME` / `CDSE_PASSWORD` env vars.
+- **GPU**: PyTorch uses CUDA automatically if available. AMP (bfloat16/fp16) is enabled by default.
+- **Git LFS**: Pre-trained models are tracked with `git lfs`. Run `git lfs pull` after cloning.
+- **Ablations**: Use `--no-rotations`, `--no-amp`, `--seed N` flags for §8 ablation runs.

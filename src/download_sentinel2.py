@@ -4,7 +4,13 @@ Ecosystem (CDSE) using the OData API.
 
 Setup:
     1. Create a free account at https://dataspace.copernicus.eu
-    2. Optionally set environment variables (falls back to the constants below):
+    2. Set credentials via environment variables (REQUIRED — no fallback):
+
+         # Windows PowerShell:
+         $env:CDSE_USERNAME="you@example.com"
+         $env:CDSE_PASSWORD="your-password"
+
+         # Linux / macOS:
          export CDSE_USERNAME="you@example.com"
          export CDSE_PASSWORD="your-password"
 
@@ -24,9 +30,8 @@ from .utils import load_config, get_logger, ensure_dir
 
 LOG = get_logger("download_sentinel2")
 
-# Fallback credentials — override with CDSE_USERNAME / CDSE_PASSWORD env vars.
-_DEFAULT_USERNAME = "mirrorghost007@gmail.com"
-_DEFAULT_PASSWORD = "laksjdhfg123@D"
+# §7 Security: credentials MUST be set via environment variables.
+# No fallback constants — storing credentials in source code is a security risk.
 
 TOKEN_URL = (
     "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/"
@@ -121,12 +126,17 @@ def main():
     args = parser.parse_args()
     cfg = load_config(args.config)
 
-    username = os.environ.get("CDSE_USERNAME") or _DEFAULT_USERNAME
-    password = os.environ.get("CDSE_PASSWORD") or _DEFAULT_PASSWORD
+    username = os.environ.get("CDSE_USERNAME", "")
+    password = os.environ.get("CDSE_PASSWORD", "")
     if not username or not password:
         raise SystemExit(
-            "No CDSE credentials found. Set CDSE_USERNAME / CDSE_PASSWORD env vars "
-            "or edit _DEFAULT_USERNAME/_DEFAULT_PASSWORD in download_sentinel2.py."
+            "CDSE credentials not found.\n"
+            "  Set CDSE_USERNAME and CDSE_PASSWORD as environment variables:\n"
+            "    Windows PowerShell:  $env:CDSE_USERNAME='you@example.com'\n"
+            "                        $env:CDSE_PASSWORD='your-password'\n"
+            "    Linux/macOS:         export CDSE_USERNAME='you@example.com'\n"
+            "                         export CDSE_PASSWORD='your-password'\n"
+            "  Never commit credentials to version control."
         )
     LOG.info("Using CDSE account: %s", username)
 

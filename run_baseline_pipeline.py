@@ -1,23 +1,24 @@
 """
-End-to-end baseline pipeline orchestrator.
+End-to-end pipeline orchestrator for HybridBathNet.
 
-Before running, make sure you've:
-  1. Set CDSE_USERNAME / CDSE_PASSWORD environment variables (or they're set
-     in download_sentinel2.py directly)
-  2. Either downloaded GEBCO manually OR pass --synthetic to skip all downloads
-     and use synthetic coastal data instead.
+§7 fixes applied:
+  - HybridBathNet training is now an explicit stage (was missing).
+  - --synthetic flag now calls src.generate_synthetic_data instead of
+    being silently ignored.
+  - Stages labelled clearly; compare_baselines reads the correct files.
 
 Usage:
     python run_baseline_pipeline.py --config config.yaml
-    python run_baseline_pipeline.py --config config.yaml --synthetic     # no downloads needed
-    python run_baseline_pipeline.py --config config.yaml --skip-download # use existing raw data
+    python run_baseline_pipeline.py --config config.yaml --synthetic
+    python run_baseline_pipeline.py --config config.yaml --skip-download
+    python run_baseline_pipeline.py --config config.yaml --seed 0 --seed 1 ...
 """
 import argparse
 import subprocess
 import sys
 
 
-def run(cmd, stage_name=""):
+def run(cmd: list, stage_name: str = ""):
     label = stage_name or " ".join(cmd[-2:])
     print(f"\n{'='*60}")
     print(f"  STAGE: {label}")
@@ -32,48 +33,72 @@ def run(cmd, stage_name=""):
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="config.yaml")
-    parser.add_argument(
-        "--skip-download", action="store_true",
-        help="Skip data download steps (use existing data/raw/*)"
+    parser = argparse.ArgumentParser(
+        description="HybridBathNet end-to-end training pipeline."
     )
-    parser.add_argument(
-        "--synthetic", action="store_true",
-        help=(
-            "Generate synthetic Sentinel-2 + GEBCO data instead of downloading "
-            "real data. Lets you run the full pipeline immediately without any "
-            "internet access or manual GEBCO download."
-        )
-    )
-    parser.add_argument(
-        "--skip-preprocess", action="store_true",
-        help="Skip preprocess step (use existing data/processed/stack.tif)"
-    )
+    parser.add_argument("--config",          default="config.yaml")
+    parser.add_argument("--skip-download",   action="store_true",
+                        help="Skip data download (use existing data/raw/*)")
+    parser.add_argument("--skip-preprocess", action="store_true",
+                        help="Skip preprocessing (use existing data/processed/stack.tif)")
+    parser.add_argument("--synthetic",       action="store_true",
+                        help="Generate synthetic Sentinel-2+GEBCO data instead of downloading")
+    parser.add_argument("--seed",            type=int, default=42,
+                        help="Random seed for training (run multiple seeds for §8 ablations)")
+    parser.add_argument("--no-amp",          action="store_true",
+                        help="Disable AMP (useful for debugging)")
+    parser.add_argument("--no-rotations",    action="store_true",
+                        help="Disable 90° rotation augmentation (ablation §3.8)")
     args = parser.parse_args()
 
     py = sys.executable
 
-    if not args.skip_download:
-        run([py, "-m", "src.download_sentinel2", "--config", args.config],
+    # ── Data acquisition ──────────────────────────────────────────────────
+    if args.synthetic:
+        # §7: --synthetic is now wired to the actual synthetic data generator
+        run([py, "-m", "src.generate_synthetic_data", "--config", args.config],
+            "Generate synthetic Sentinel-2 + GEBCO data")
+    elif not args.skip_download:
+        run([py, "-m", "src.download_sentinel2",  "--config", args.config],
             "Download Sentinel-2 (real tiles from CDSE)")
-        run([py, "-m", "src.download_gebco",     "--config", args.config],
-            "Download + convert GEBCO (auto via NOAA ERDDAP)")
-        run([py, "-m", "src.download_coastline", "--config", args.config],
+        run([py, "-m", "src.download_gebco",      "--config", args.config],
+            "Download + convert GEBCO (NOAA ERDDAP)")
+        run([py, "-m", "src.download_coastline",  "--config", args.config],
             "Download OSM coastline")
 
+    # ── Preprocessing ─────────────────────────────────────────────────────
     if not args.skip_preprocess:
-        run([py, "-m", "src.preprocess", "--config", args.config], "Preprocess")
+        run([py, "-m", "src.preprocess", "--config", args.config],
+            "Preprocess: BOA offset, median composite, temporal std")
 
-    run([py, "-m", "src.features",          "--config", args.config], "Feature engineering")
-    run([py, "-m", "src.baseline_models",   "--config", args.config], "Tabular baselines (Stumpf + RF)")
-    run([py, "-m", "src.cnn_baseline",      "--config", args.config], "CNN baseline")
-    run([py, "-m", "src.compare_baselines", "--config", args.config], "Compare baselines")
+    # ── Feature engineering ───────────────────────────────────────────────
+    run([py, "-m", "src.features", "--config", args.config],
+        "Feature engineering: Lyzenga channels, glint correction, mask, split")
 
-    print("\n" + "="*60)
+    # ── Tabular baselines ─────────────────────────────────────────────────
+    run([py, "-m", "src.baseline_models", "--config", args.config],
+        "Tabular baselines: Stumpf (Lyzenga), RandomForest, GradientBoosting")
+
+    # ── HybridBathNet v3 ──────────────────────────────────────────────────
+    train_cmd = [py, "-m", "src.cnn_baseline", "--config", args.config,
+                 "--seed", str(args.seed)]
+    if args.no_amp:
+        train_cmd.append("--no-amp")
+    if args.no_rotations:
+        train_cmd.append("--no-rotations")
+    run(train_cmd, f"HybridBathNet v3 training (seed={args.seed})")
+
+    # ── Comparison & plots ────────────────────────────────────────────────
+    run([py, "-m", "src.compare_baselines", "--config", args.config],
+        "Compare all baselines + generate plots")
+
+    print("\n" + "=" * 60)
     print("  PIPELINE COMPLETE")
-    print("  Results in results/baseline_comparison.csv + .png")
-    print("="*60 + "\n")
+    print("  Results:  results/baseline_comparison.csv  + .png")
+    print("            results/depth_bin_comparison.png")
+    print("            results/uncertainty_calibration.png")
+    print("            results/hybridbathnet_results.json")
+    print("=" * 60 + "\n")
 
 
 if __name__ == "__main__":

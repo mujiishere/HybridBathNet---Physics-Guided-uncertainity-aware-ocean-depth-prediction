@@ -3,6 +3,16 @@ Preprocess raw Sentinel-2 SAFE products into a cloud-masked, co-registered,
 temporally-composited multi-band raster stack aligned with the GEBCO depth
 grid, ready for feature engineering.
 
+Key fixes applied:
+  - Sentinel-2 L2A BOA offset: reflectance = (DN - 1000) / 10000  [§1.3]
+    Applied before cloud mask so the mask test (stack[0] > 0) is on true
+    reflectance, not raw DN.  Scenes from processing baseline N0400+
+    (all 2024 products) carry a -1000 additive offset.
+  - Temporal std (per-pixel standard deviation across scenes) saved as an
+    additional channel: a proxy for turbidity / cloud-clearing noise [§2.4].
+  - The cloud/valid mask is now saved with its original boolean values,
+    not as 0.0/1.0, to preserve integer semantics downstream.
+
 Usage:
     python -m src.preprocess --config config.yaml
 """
@@ -27,7 +37,12 @@ LOG = get_logger("preprocess")
 #   8 cloud (medium prob), 9 cloud (high prob), 10 thin cirrus, 11 snow
 # "Clear" = usable land/water pixels, excluding cloud/shadow/no-data/snow.
 SCL_CLEAR_CLASSES = {4, 5, 6, 7}
-SCL_WATER_CLASS = 6
+SCL_WATER_CLASS   = 6
+
+# Sentinel-2 L2A BOA reflectance scaling (valid for processing baseline N0400+)
+# reflectance = (DN - BOA_ADD_OFFSET) / QUANTIFICATION_VALUE
+BOA_ADD_OFFSET         = 1000.0   # additive offset in DN units
+BOA_QUANTIFICATION_VAL = 10000.0  # divisor for surface reflectance
 
 
 def unzip_all(raw_dir: str) -> list:
@@ -79,7 +94,7 @@ def get_target_grid(bbox_geo: list, dst_crs: str, resolution: float = 10.0):
     transformer = Transformer.from_crs("EPSG:4326", dst_crs, always_xy=True)
     minx, miny = transformer.transform(bbox_geo[0], bbox_geo[1])
     maxx, maxy = transformer.transform(bbox_geo[2], bbox_geo[3])
-    dst_width = int(np.ceil((maxx - minx) / resolution))
+    dst_width  = int(np.ceil((maxx - minx) / resolution))
     dst_height = int(np.ceil((maxy - miny) / resolution))
     dst_transform = from_bounds(minx, miny, maxx, maxy, dst_width, dst_height)
     dst_shape = (dst_height, dst_width)
@@ -87,7 +102,13 @@ def get_target_grid(bbox_geo: list, dst_crs: str, resolution: float = 10.0):
 
 
 def load_scene_onto_grid(safe_dir: Path, bands: list, dst_transform, dst_crs, dst_shape):
-    """Load requested bands + SCL mask for one scene, reprojected to target AOI grid."""
+    """Load requested bands + SCL mask for one scene, reprojected to target AOI grid.
+
+    FIX §1.3: Applies the Sentinel-2 L2A BOA additive offset before the
+    cloud-mask comparison, so `stack[0] > 0` is tested on true surface
+    reflectance (not raw DN).  Formula:
+        reflectance = clip((DN - 1000) / 10000, 0, None)
+    """
     stack = []
     for b in bands:
         path = find_band_path(safe_dir, b, "10m")
@@ -103,7 +124,14 @@ def load_scene_onto_grid(safe_dir: Path, bands: list, dst_transform, dst_crs, ds
                 resampling=Resampling.bilinear,
             )
         stack.append(dst)
-    stack = np.stack(stack, axis=0)  # (bands, H, W)
+    stack = np.stack(stack, axis=0)  # (bands, H, W) — still raw DN
+
+    # ── §1.3  BOA offset correction ──────────────────────────────────────────
+    # S2 L2A products from processing baseline N0400+ (all 2024 scenes) carry
+    # a BOA_ADD_OFFSET of −1000, so true surface reflectance is:
+    #     ρ = (DN − 1000) / 10000
+    # Clip to [0, ∞) because negative reflectance is non-physical.
+    stack = np.clip((stack - BOA_ADD_OFFSET) / BOA_QUANTIFICATION_VAL, 0.0, None)
 
     scl_path = find_scl_path(safe_dir)
     with rasterio.open(scl_path) as src:
@@ -118,18 +146,29 @@ def load_scene_onto_grid(safe_dir: Path, bands: list, dst_transform, dst_crs, ds
             resampling=Resampling.nearest,
         )
 
-    # Valid clear pixels: SCL class in clear classes and valid non-zero reflectance
-    clear_mask = np.isin(np.round(scl_dst).astype(int), list(SCL_CLEAR_CLASSES)) & (stack[0] > 0)
+    # Valid clear pixels: SCL class in clear classes AND non-zero reflectance
+    # (test on true reflectance, not DN — the offset is already subtracted above)
+    clear_mask = (
+        np.isin(np.round(scl_dst).astype(int), list(SCL_CLEAR_CLASSES))
+        & (stack[0] > 0)
+    )
     return stack, clear_mask
 
 
 def temporal_composite(safe_dirs: list, bands: list, dst_transform, dst_crs, dst_shape):
-    """Median composite across all cloud-free pixels from all scenes."""
+    """Median composite + per-pixel temporal std across all cloud-free scenes.
+
+    §2.4: Also returns the per-pixel temporal standard deviation across the
+    scene stack as a turbidity / noise proxy.  Std is NaN wherever fewer than
+    2 cloud-free observations exist.
+    """
     all_stacks, all_masks = [], []
 
     for safe_dir in safe_dirs:
         try:
-            stack, clear_mask = load_scene_onto_grid(safe_dir, bands, dst_transform, dst_crs, dst_shape)
+            stack, clear_mask = load_scene_onto_grid(
+                safe_dir, bands, dst_transform, dst_crs, dst_shape
+            )
         except FileNotFoundError as e:
             LOG.warning("Skipping %s: %s", safe_dir.name, e)
             continue
@@ -143,9 +182,16 @@ def temporal_composite(safe_dirs: list, bands: list, dst_transform, dst_crs, dst
 
     cube = np.stack(all_stacks, axis=0)          # (time, bands, H, W)
     with np.errstate(all="ignore"):
-        composite = np.nanmedian(cube, axis=0)    # (bands, H, W)
+        composite = np.nanmedian(cube, axis=0)   # (bands, H, W)
+        # Per-pixel temporal std — requires ≥2 valid observations
+        # ddof=1 for unbiased; nanstd returns NaN columns where n<2
+        temporal_std = np.nanstd(cube, axis=0, ddof=1)   # (bands, H, W)
+
+    # Replace NaN std (< 2 obs) with 0 so downstream channels don't have holes
+    temporal_std = np.nan_to_num(temporal_std, nan=0.0)
+
     valid_any = np.any(np.stack(all_masks, axis=0), axis=0)
-    return composite, valid_any
+    return composite, temporal_std, valid_any
 
 
 def resample_gebco(gebco_path: str, ref_transform, ref_crs, ref_shape):
@@ -169,8 +215,8 @@ def main():
     args = parser.parse_args()
     cfg = load_config(args.config)
 
-    raw_dir = cfg["sentinel2"]["raw_dir"]
-    bands = cfg["sentinel2"]["bands"]
+    raw_dir       = cfg["sentinel2"]["raw_dir"]
+    bands         = cfg["sentinel2"]["bands"]
     processed_dir = cfg["preprocessing"]["processed_dir"]
     ensure_dir(processed_dir)
 
@@ -178,41 +224,63 @@ def main():
     safe_dirs = unzip_all(raw_dir)
     LOG.info("Found %d SAFE products", len(safe_dirs))
     if not safe_dirs:
-        raise SystemExit(f"No .SAFE products found under {raw_dir} — run download_sentinel2.py first.")
+        raise SystemExit(
+            f"No .SAFE products found under {raw_dir} — run download_sentinel2.py first."
+        )
 
-    bbox = cfg["aoi"]["bbox"]
-    dst_crs = cfg["project"]["crs"]
+    bbox      = cfg["aoi"]["bbox"]
+    dst_crs   = cfg["project"]["crs"]
     transform, crs, shape = get_target_grid(bbox, dst_crs, resolution=10.0)
     LOG.info("Target AOI grid: %s (HxW), CRS: %s", shape, crs)
 
-    LOG.info("Building cloud-free median composite across %d scenes (bands: %s)...", len(safe_dirs), bands)
-    composite, valid_mask = temporal_composite(safe_dirs, bands, transform, crs, shape)
+    LOG.info(
+        "Building cloud-free median composite + temporal std across %d scenes (bands: %s)...",
+        len(safe_dirs), bands
+    )
+    composite, temporal_std, valid_mask = temporal_composite(
+        safe_dirs, bands, transform, crs, shape
+    )
 
     LOG.info("Resampling GEBCO depth grid onto the Sentinel-2 composite grid...")
     depth = resample_gebco(cfg["gebco"]["raw_path"], transform, crs, shape)
 
+    # Output layout:
+    #   Bands 1–N_b  : median spectral reflectance (true surface reflectance, 0–1)
+    #   Bands N_b+1–2N_b: per-pixel temporal std (turbidity / noise proxy)
+    #   Band 2N_b+1  : gebco_depth (GEBCO elevation in metres, negative = below sea)
+    #   Band 2N_b+2  : valid_mask  (1 = water pixel with ≥1 clear observation)
+    n_b = len(bands)
     out_profile = {
         "driver": "GTiff",
         "height": shape[0],
-        "width": shape[1],
-        "count": len(bands) + 2,  # bands + depth + valid_mask
-        "dtype": "float32",
-        "crs": crs,
+        "width":  shape[1],
+        "count":  n_b * 2 + 2,   # median bands + std bands + depth + mask
+        "dtype":  "float32",
+        "crs":    crs,
         "transform": transform,
         "nodata": np.nan,
+        "compress": "lzw",       # lossless compression for float32 rasters
     }
     out_path = Path(processed_dir) / "stack.tif"
     with rasterio.open(out_path, "w", **out_profile) as dst:
+        # Median spectral bands
         for i, b in enumerate(bands, start=1):
-            band_arr = composite[i - 1]
-            dst.write(np.nan_to_num(band_arr, nan=0.0), i)
+            dst.write(np.nan_to_num(composite[i - 1], nan=0.0), i)
             dst.set_band_description(i, b)
-        dst.write(depth, len(bands) + 1)
-        dst.set_band_description(len(bands) + 1, "gebco_depth")
-        dst.write(valid_mask.astype(np.float32), len(bands) + 2)
-        dst.set_band_description(len(bands) + 2, "valid_mask")
+        # Temporal std bands
+        for i, b in enumerate(bands, start=1):
+            dst.write(np.nan_to_num(temporal_std[i - 1], nan=0.0), n_b + i)
+            dst.set_band_description(n_b + i, f"{b}_std")
+        # GEBCO depth and valid mask
+        dst.write(depth, n_b * 2 + 1)
+        dst.set_band_description(n_b * 2 + 1, "gebco_depth")
+        dst.write(valid_mask.astype(np.float32), n_b * 2 + 2)
+        dst.set_band_description(n_b * 2 + 2, "valid_mask")
 
-    LOG.info("Wrote preprocessed stack to %s", out_path)
+    LOG.info(
+        "Wrote preprocessed stack to %s  (%d spectral + %d std + depth + mask bands)",
+        out_path, n_b, n_b
+    )
 
 
 if __name__ == "__main__":

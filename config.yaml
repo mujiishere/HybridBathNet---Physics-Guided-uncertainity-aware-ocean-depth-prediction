@@ -1,7 +1,7 @@
 project:
-  name: hybridbathnet_baseline
-  # Update to the UTM zone EPSG code covering your AOI, e.g. EPSG:32643 for
-  # Kollam/Kerala coast. Use src.utils.utm_epsg_from_lonlat(lon, lat) to find it.
+  name: hybridbathnet_v3
+  # Update to the UTM zone EPSG code covering your AOI.
+  # Use src.utils.utm_epsg_from_lonlat(lon, lat) to find it.
   crs: "EPSG:32643"
 
 aoi:
@@ -34,65 +34,90 @@ preprocessing:
 features:
   patch_size: 64
   patch_stride: 32
-  train_frac: 0.7
-  val_frac: 0.15
-  test_frac: 0.15
-  split_axis: "lon"        # spatial split (by column) to avoid leakage
+  train_frac: 0.70
+  val_frac:   0.15
+  test_frac:  0.15
+  split_axis: "lon"               # spatial split (by column) to avoid leakage
   features_dir: "data/features"
+  # §2.5 — optional distance-to-shore channel from downloaded OSM coastline
+  use_distance_to_shore: false    # set true to add the channel (requires scipy)
 
 training:
   batch_size: 32
-  epochs: 80
+  # §1.4 — epochs must be a multiple of lr_restart_period to avoid mid-cycle cutoff
+  epochs: 90                      # 90 = 3 × T_0=30 cycles
   learning_rate: 0.001
-  device: "cuda"            # falls back to CPU automatically if unavailable
+  device: "cuda"                  # falls back to CPU automatically if unavailable
   checkpoint_dir: "checkpoints"
 
 
-# Physics-guided & Uncertainty-aware hyper-parameters — v2
+# ── HybridBathNet v3 hyper-parameters ────────────────────────────────────────
 hybridbathnet:
-  in_channels: 6
+  # ── Input channels ──────────────────────────────────────────────────────────
+  # After §2.x feature engineering the patch tensor has this many channels:
+  #   4 spectral (B02/B03/B04/B08) + 3 Lyzenga + 2 Lyzenga ratios
+  #   + 1 Stumpf + 1 Beer-Lambert z_prior + 1 mask + 4 temporal std = 16
+  #   + optional distance-to-shore (1 extra if use_distance_to_shore=true)
+  in_channels: 16                 # update if use_distance_to_shore=true → 17
+  n_spectral:  3                  # first 3 channels are B02/B03/B04 (raw reflectance)
   feature_dim: 128
-  dropout_rate: 0.1
 
-  # --- v2: Improved QAA Kd ---
-  i0_over_epsilon: 100.0   # Signal-to-noise ratio threshold for Beer-Lambert extinction
-  use_red_kd: true          # Use red band in QAA Kd formula (improves turbid water accuracy)
+  # ── §1.2 Physics: raw-reflectance Kd ────────────────────────────────────────
+  # Mean/std de-normalisation buffers are loaded from the dataset at runtime;
+  # no need to set them here.
+  i0_over_epsilon: 100.0          # Beer-Lambert signal-to-noise threshold
+  use_red_kd: true                # include B04 in QAA Kd formula (turbid-water gain)
 
-  # --- v2: Cross-attention physics fusion ---
-  n_attn_heads: 4           # Number of attention heads in CrossAttentionPhysicsFusion
-  phys_tokens: 4            # Number of physics embedding tokens (richer physics representation)
+  # ── §3.6 Reconstruction head ─────────────────────────────────────────────────
+  use_recon_head: true            # enable self-supervised optical reconstruction loss
+  n_recon_bands:  3               # reconstruct B02, B03, B04
 
-  # --- v2: Loss weights ---
+  # ── Dropout / uncertainty ────────────────────────────────────────────────────
+  dropout_rate: 0.1               # Dropout2d rate (keeps MC Dropout epistemic UQ)
+  mc_samples:   30                # number of MC Dropout forward passes at test time
+
+  # ── §4.1 One compensation mechanism ─────────────────────────────────────────
+  use_depth_sampler:   true       # use DepthStratifiedSampler
+  use_depth_weighting: false      # disable loss weighting when sampler is ON (§4.1)
+  depth_strata: 5                 # number of depth quantile strata
+
+  # ── §4.2 / §4.3 Loss ─────────────────────────────────────────────────────────
   loss_weights:
-    w_mse: 1.0              # Weight for direct Depth Regression MSE Loss
-    w_nll: 1.0              # Weight for heteroscedastic Gaussian NLL loss (Aleatoric Uncertainty)
-    w_phys: 0.5             # Weight for physical non-negativity depth constraint (\hat{y} >= 0)
-    w_ext: 0.5              # Weight for Beer-Lambert optical extinction depth limit (\hat{y} <= z_ext)
+    w_mse:   1.0    # Huber (smooth_l1_loss) depth regression weight
+    w_nll:   1.0    # β-NLL uncertainty calibration weight
+    w_phys:  0.3    # non-negativity physical constraint (ReLU(-ŷ)) weight
+    w_ext:   0.3    # Beer-Lambert extinction bound penalty weight
+    w_recon: 0.1    # optical reconstruction self-supervised loss weight (§3.6)
+    w_lowres: 0.5   # GEBCO-scale (46-pixel avg) consistency loss weight (§3.7)
 
-  # --- v2: Depth-weighted loss ---
-  use_depth_weighting: true  # Up-weight deep-water samples (harder; less represented)
-  depth_weight_scale: 10.0   # Depth (m) at which sample weight = 1.0
+  beta_nll:    0.5                # β-NLL exponent (0.5 recommended; 0 = standard NLL)
+  huber_delta: 0.5                # smooth_l1_loss δ in normalised depth units
 
-  # --- v2: Curriculum NLL annealing ---
-  nll_warmup_epochs: 20      # Linearly ramp NLL weight from 0 -> w_nll over this many epochs
-                             # Model first learns MSE then gradually calibrates uncertainty
+  # ── §4.5 Optimiser & schedule ────────────────────────────────────────────────
+  # lr is set in training.learning_rate (2e-3 is recommended with 5-epoch warmup)
+  nll_warmup_epochs: 20           # curriculum: NLL weight ramps from 0 → w_nll
+  lr_restart_period: 30           # CosineAnnealingWarmRestarts T_0 (must divide epochs)
+  grad_clip_norm: 1.0             # max gradient norm for clipping
+  ema_decay: 0.999                # EMA weight decay for the shadow model
+  early_stop_patience: 15         # epochs without val-RMSE improvement → stop
 
-  # --- v2: Training stability ---
-  grad_clip_norm: 1.0        # Max gradient norm (prevents physics loss gradient explosions)
-  lr_restart_period: 30      # CosineAnnealingWarmRestarts T_0 (LR restart interval in epochs)
+  # ── §3.8 Augmentation ─────────────────────────────────────────────────────────
+  aug_noise_std: 0.02             # spectral jitter noise std (on z-scored channels)
+  # use_rotations controlled by --no-rotations CLI flag (default: True)
 
-  # --- v2: Spectral augmentation ---
-  aug_noise_std: 0.02        # Gaussian noise std for spectral jitter augmentation
+  # ── §5.4 Calibration reporting ────────────────────────────────────────────────
+  # Calibration metrics (NLL, coverage, sparsification) are always reported
+  # for the test set. No extra config needed.
 
-  # --- v2: Depth-stratified curriculum sampler ---
-  depth_strata: 5            # Number of depth quantile strata for balanced batching
+  # ── §5.2 Snapshot ensemble ────────────────────────────────────────────────────
+  # Snapshots are saved automatically at the end of each cosine cycle.
+  # Paths are logged and stored in the checkpoint dict under "snapshots".
 
-  # --- v2: Uncertainty inference ---
-  mc_samples: 30             # Number of MC Dropout forward passes (increased from 20)
+  # ── §6.3 AMP / mixed precision ───────────────────────────────────────────────
+  # Controlled by --no-amp CLI flag (AMP ON by default when CUDA is available).
 
 evaluation:
   results_dir: "results"
 
 export:
   output_dir: "outputs/rasters"
-
