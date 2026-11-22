@@ -59,7 +59,11 @@ Historical joint_v1 job **stopped at user request** during control epoch8; its f
 
 This repository contains the v3 baseline pipeline and model for **HybridBathNet**: an end-to-end framework for satellite-derived bathymetry (ocean depth prediction) from Sentinel-2 imagery, incorporating physics priors, uncertainty quantification, and a dense U-Net architecture.
 
-## Current experimental status — updated 2026-11-06
+## Current status — HybridBathNet v2 (updated 2026-11-22)
+
+v2 is a four-site, independently referenced study with deployable GIS products; see **[README_V2.md](README_V2.md)**. Out-of-fold RMSE: Ponce (lidar) 1.26 m, R² 0.94; Kepulauan Seribu (sonar) 0.82 m; Langebaan (ICESat-2 ATL24) 0.97 m, vs Stumpf 3.03 / 1.10 / 1.40 m. On the turbid Kerala shelf (ATL24) no method is usable (v2 4.73 m, Stumpf 4.88 m), and the maps flag it as low confidence. Cross-conformal 90 % intervals cover 88.8–89.9 % at all four sites. Cross-site transfer without local soundings remains unsolved. Run everything with `scripts_v2/run_full_study.ps1`; dashboard via `uvicorn sdb_platform.api.main:app` or `docker compose -f sdb_platform/docker-compose.yml up`.
+
+## v1 experimental status — updated 2026-11-06
 
 **Recovery study authorized and underway:** ATL24 scene pairing/quality repair, independent optical visibility, and uncertainty calibration/ensembles are being executed in `runs/2026-11-06/recovery_v2/`. Public catalogue/model access is being checked using [fetcher](scripts/fetch_recovery_inputs.py); CUDA and disk space are available. No new training has started yet. [Current handoff](PROJECT_CONTEXT.md).
 

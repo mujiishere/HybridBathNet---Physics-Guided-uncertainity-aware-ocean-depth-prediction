@@ -1,0 +1,60 @@
+/home/claude/hbn/hbn2/physics.py:48: RankWarning: Polyfit may be poorly conditioned
+  b = float(np.polyfit(nir[ok], v[ok], 1)[0])
+/home/claude/hbn/hbn2/physics.py:48: RankWarning: Polyfit may be poorly conditioned
+  b = float(np.polyfit(nir[ok], v[ok], 1)[0])
+/home/claude/hbn/hbn2/physics.py:48: RankWarning: Polyfit may be poorly conditioned
+  b = float(np.polyfit(nir[ok], v[ok], 1)[0])
+{
+ "ponce_pr": {
+  "n": 116845,
+  "rmse": 1.2640294726090096,
+  "mae": 0.8551851526910728,
+  "bias": -0.1428836080339627,
+  "nmad": 0.7910508095741271,
+  "r2": 0.9412153522590165,
+  "rel_rmse_pct": 12.606642796578353,
+  "within_0.5m": 47.51166074714365,
+  "within_1m": 70.8322991997946,
+  "within_2m": 89.38165946339167,
+  "iho_order2_pct": 71.91749753947538
+ },
+ "seribu_id": {
+  "n": 403,
+  "rmse": 0.8195780896451984,
+  "mae": 0.5110241014963344,
+  "bias": -0.03839988832734063,
+  "nmad": 0.3947968837738037,
+  "r2": 0.8664976828535975,
+  "rel_rmse_pct": 31.380697603914847,
+  "within_0.5m": 69.23076923076923,
+  "within_1m": 84.863523573201,
+  "within_2m": 96.27791563275434,
+  "iho_order2_pct": 84.863523573201
+ },
+ "langebaan_za": {
+  "n": 475,
+  "rmse": 0.9664827697587239,
+  "mae": 0.5223501727455541,
+  "bias": -0.2397053357174522,
+  "nmad": 0.423861372756958,
+  "r2": 0.37439334017555115,
+  "rel_rmse_pct": 33.127858184355446,
+  "within_0.5m": 65.05263157894737,
+  "within_1m": 84.42105263157896,
+  "within_2m": 97.68421052631578,
+  "iho_order2_pct": 84.42105263157896
+ },
+ "kerala_in": {
+  "n": 819,
+  "rmse": 4.734654338169347,
+  "mae": 3.4347393751435518,
+  "bias": 0.14492981366913252,
+  "nmad": 3.240151819038391,
+  "r2": 0.2771290886082971,
+  "rel_rmse_pct": 32.01930016417177,
+  "within_0.5m": 10.744810744810746,
+  "within_1m": 21.123321123321123,
+  "within_2m": 41.514041514041516,
+  "iho_order2_pct": 22.22222222222222
+ }
+}

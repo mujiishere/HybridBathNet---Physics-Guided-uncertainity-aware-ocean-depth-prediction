@@ -1,0 +1,10 @@
+ponce_pr written
+seribu_id written
+langebaan_za written
+/home/claude/hbn/hbn2/physics.py:48: RankWarning: Polyfit may be poorly conditioned
+  b = float(np.polyfit(nir[ok], v[ok], 1)[0])
+/home/claude/hbn/hbn2/physics.py:48: RankWarning: Polyfit may be poorly conditioned
+  b = float(np.polyfit(nir[ok], v[ok], 1)[0])
+/home/claude/hbn/hbn2/physics.py:48: RankWarning: Polyfit may be poorly conditioned
+  b = float(np.polyfit(nir[ok], v[ok], 1)[0])
+kerala_in written

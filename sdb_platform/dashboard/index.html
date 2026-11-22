@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HybridBathNet — depth & confidence for coastal planners</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=Barlow:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@1,8..60,500;1,8..60,700&display=swap" rel="stylesheet">
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<style>
+:root{
+  --navy:#0E3A5B; --ink:#1B2A35; --shoal:#BFDDEA; --sea:#5E9CC0; --paper:#F6F9FA;
+  --buff:#E6D8A6; --magenta:#B8237A; --rule:#C9D6DD; --muted:#5B6B76;
+  --A:#1A9641; --B:#E8913C; --C:#D7191C; --D:#5A5A5A;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;font-family:Barlow,system-ui,sans-serif;color:var(--ink);background:var(--paper)}
+#app{display:grid;grid-template-columns:340px 1fr;height:100vh}
+aside{background:var(--paper);border-right:1px solid var(--rule);overflow-y:auto;padding:20px 20px 32px}
+h1{font-family:"Barlow Condensed";font-weight:600;font-size:28px;line-height:1.05;margin:0 0 4px;color:var(--navy);letter-spacing:.2px}
+.sub{color:var(--muted);font-size:14px;margin:0 0 18px;line-height:1.4}
+h2{font-family:"Barlow Condensed";font-weight:600;font-size:18px;color:var(--navy);margin:22px 0 8px}
+label{font-size:13px;color:var(--muted);display:block;margin-bottom:4px}
+select,input[type=number]{width:100%;font:inherit;padding:7px 9px;border:1px solid var(--rule);border-radius:4px;background:#fff;color:var(--ink)}
+select:focus-visible,input:focus-visible,button:focus-visible{outline:2px solid var(--magenta);outline-offset:2px}
+.layers{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.layers button{font:500 14px Barlow;padding:8px 6px;border:1px solid var(--rule);background:#fff;border-radius:4px;cursor:pointer;color:var(--ink);text-align:left}
+.layers button[aria-pressed=true]{background:var(--navy);color:#fff;border-color:var(--navy)}
+.row{display:flex;gap:8px;align-items:end}
+.row>div{flex:1}
+.btn{font:600 14px Barlow;padding:8px 12px;border-radius:4px;border:1px solid var(--navy);background:#fff;color:var(--navy);cursor:pointer}
+.btn.primary{background:var(--navy);color:#fff}
+.btn[aria-pressed=true]{background:var(--magenta);border-color:var(--magenta);color:#fff}
+.legend{margin-top:10px;font-size:13px}
+.ramp{height:10px;border-radius:2px;margin:4px 0}
+.ticks{display:flex;justify-content:space-between;color:var(--muted);font-size:12px}
+.classes div{display:flex;align-items:center;gap:8px;margin:3px 0}
+.sw{width:14px;height:14px;border-radius:2px;flex:none}
+#readout{border-top:2px solid var(--navy);margin-top:18px;padding-top:12px;min-height:110px}
+.sounding{font-family:"Source Serif 4";font-style:italic;font-weight:700;font-size:56px;line-height:1;color:var(--navy)}
+.sounding sub{font-size:30px;vertical-align:-2px}
+.pm{font-family:"Source Serif 4";font-style:italic;font-size:20px;color:var(--muted)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:13px;margin-top:8px}
+.kv dt{color:var(--muted)} .kv dd{margin:0;font-variant-numeric:tabular-nums}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;color:#fff;font-size:12px;font-weight:600}
+.hint{font-size:13px;color:var(--muted);line-height:1.45}
+#map{position:relative}
+#profile{position:absolute;z-index:5;left:12px;right:12px;bottom:12px;background:rgba(246,249,250,.97);border:1px solid var(--rule);border-radius:6px;padding:10px 14px;display:none;max-height:42%}
+#profile h3{margin:0 0 4px;font:600 16px "Barlow Condensed";color:var(--navy)}
+#profile .close{position:absolute;right:10px;top:6px;border:0;background:none;font-size:20px;cursor:pointer;color:var(--muted)}
+#status{font-size:14px;margin-top:6px}
+.metric{display:grid;grid-template-columns:1fr auto;font-size:13px;border-bottom:1px solid var(--rule);padding:4px 0}
+.metric span:last-child{font-variant-numeric:tabular-nums;font-weight:600}
+.maplibregl-popup-content{font-family:Barlow;padding:8px 10px}
+@media (max-width:820px){#app{grid-template-columns:1fr;grid-template-rows:auto 60vh}aside{order:2;border-right:0;border-top:1px solid var(--rule)}#map{order:1}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app">
+<aside>
+  <h1>HybridBathNet depth chart</h1>
+  <p class="sub">Satellite-derived depths with calibrated uncertainty. Read the confidence class before using any sounding for planning.</p>
+
+  <label for="site">Survey area</label>
+  <select id="site"></select>
+
+  <h2>Map layer</h2>
+  <div class="layers" role="group" aria-label="Map layer">
+    <button data-layer="depth" aria-pressed="true">Depth</button>
+    <button data-layer="confidence" aria-pressed="false">Confidence class</button>
+    <button data-layer="sigma" aria-pressed="false">Uncertainty (σ)</button>
+    <button data-layer="width90" aria-pressed="false">90 % interval width</button>
+    <button data-layer="hazard" aria-pressed="false">Draft check</button>
+    <button data-layer="none" aria-pressed="false">Imagery only</button>
+  </div>
+  <div style="margin-top:10px"><label for="opacity">Layer opacity</label><input id="opacity" type="range" min="0" max="1" step="0.05" value="0.85" style="width:100%"></div>
+  <div class="legend" id="legend"></div>
+
+  <h2>Vessel check</h2>
+  <div class="row">
+    <div><label for="draft">Draft (m)</label><input id="draft" type="number" value="2.0" step="0.1" min="0"></div>
+    <div><label for="ukc">Clearance (m)</label><input id="ukc" type="number" value="0.5" step="0.1" min="0"></div>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <button class="btn" id="drawRoute" aria-pressed="false">Draw route</button>
+    <button class="btn" id="drawArea" aria-pressed="false">Draw area</button>
+    <button class="btn" id="clearDraw">Clear</button>
+  </div>
+  <p class="hint" id="drawHint">Click the map to add points, double-click to finish. Hazard uses the shallow end of the 95 % interval.</p>
+  <div id="status"></div>
+
+  <div id="readout"><p class="hint">Click any water cell to read its depth, interval and confidence.</p></div>
+
+  <h2>Validation for this area</h2>
+  <div id="metrics" class="hint">Loading…</div>
+</aside>
+<div id="map">
+  <div id="profile" role="region" aria-label="Route depth profile">
+    <button class="close" aria-label="Close profile">×</button>
+    <h3 id="profTitle">Route profile</h3>
+    <svg id="profSvg" width="100%" height="170"></svg>
+  </div>
+</div>
+</div>
+<script>
+const STATIC = window.HBN_STATIC || null;           // static demo bundle (no server)
+const API = STATIC ? null : '';
+const CONF = {1:['A','High','var(--A)'],2:['B','Medium','var(--B)'],3:['C','Low','var(--C)'],4:['D','Optically deep / extrapolated','var(--D)']};
+let sites=[], cur=null, layer='depth', drawMode=null, verts=[];
+
+const map = new maplibregl.Map({container:'map',style:{version:8,sources:{
+  img:{type:'raster',tiles:['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],tileSize:256,attribution:'Imagery © Esri, Maxar, Earthstar Geographics'}},
+  layers:[{id:'img',type:'raster',source:'img',paint:{'raster-saturation':-0.35}}]},center:[0,0],zoom:2,maxZoom:18});
+map.addControl(new maplibregl.NavigationControl(),'top-right');
+map.addControl(new maplibregl.ScaleControl({unit:'metric'}),'bottom-right');
+map.doubleClickZoom.disable();
+
+function legend(){
+  const L=document.getElementById('legend');
+  const ramp=(g,a,b,u)=>`<div class="ramp" style="background:linear-gradient(90deg,${g})"></div><div class="ticks"><span>${a}</span><span>${u}</span><span>${b}</span></div>`;
+  if(layer==='depth') L.innerHTML=ramp('#def5e5,#a1dab4,#41b6c4,#2c7fb8,#253494,#081d58','0 m','20 m','depth below water level');
+  else if(layer==='sigma') L.innerHTML=ramp('#ffffcc,#fed976,#fd8d3c,#e31a1c,#800026','0','5 m','predictive σ');
+  else if(layer==='width90') L.innerHTML=ramp('#f7fcf5,#a1d99b,#41ab5d,#00441b','0','8 m','90 % interval width');
+  else if(layer==='confidence') L.innerHTML='<div class="classes">'+Object.values(CONF).map(c=>`<div><span class="sw" style="background:${c[2]}"></span><b>${c[0]}</b>&nbsp;${c[1]}</div>`).join('')+'</div><p class="hint">A: 90 % interval within ±1 m. B: within ±2 m. C: wider. D: beyond the optical detection limit or the 20 m study domain.</p>';
+  else if(layer==='hazard') L.innerHTML='<div class="classes"><div><span class="sw" style="background:var(--C)"></span>Hazard: 95 % shoal bound shallower than draft + clearance</div><div><span class="sw" style="background:var(--B)"></span>Caution: under 2 m spare</div><div><span class="sw" style="background:var(--A)"></span>Clear</div><div><span class="sw" style="background:var(--D)"></span>Unknown (optically deep)</div></div>';
+  else L.innerHTML='';
+}
+
+function setOverlay(){
+  ['ov'].forEach(id=>{ if(map.getLayer(id)) map.removeLayer(id); if(map.getSource(id)) map.removeSource(id); });
+  legend(); if(layer==='none'||!cur) return;
+  const op=+document.getElementById('opacity').value;
+  if(STATIC){
+    const s=STATIC.sites[cur.name]; const key=layer==='hazard'?'hazard':layer;
+    if(!s.images[key]) return;
+    const [w,so,e,n]=s.bounds;
+    map.addSource('ov',{type:'image',url:s.images[key],coordinates:[[w,n],[e,n],[e,so],[w,so]]});
+  } else {
+    const d=document.getElementById('draft').value, u=document.getElementById('ukc').value;
+    const q=layer==='hazard'?`?draft=${(+d)+(+u)-0.5}`:'';
+    map.addSource('ov',{type:'raster',tiles:[`/tiles/${cur.name}/${layer}/{z}/{x}/{y}.png${q}`],tileSize:256,bounds:cur.bounds});
+  }
+  map.addLayer({id:'ov',type:'raster',source:'ov',paint:{'raster-opacity':op,'raster-resampling':layer==='confidence'||layer==='hazard'?'nearest':'linear'}},
+               map.getLayer('draw-line')?'draw-line':undefined);
+}
+
+function fmtSounding(d){ const w=Math.floor(d), f=Math.round((d-w)*10); return f===10?`${w+1}`:`${w}<sub>${f}</sub>`; }
+function readout(r){
+  const el=document.getElementById('readout');
+  if(!r){el.innerHTML='<p class="hint">No prediction here. Pick a water cell inside the survey area.</p>';return;}
+  const c=CONF[r.confidence]||['–','n/a','#999'];
+  el.innerHTML=`<div style="display:flex;align-items:baseline;gap:10px"><span class="sounding">${fmtSounding(r.depth)}</span><span class="pm">± ${r.sigma.toFixed(1)} m</span></div>
+   <div style="margin-top:6px"><span class="badge" style="background:${c[2]}">${c[0]} · ${c[1]}</span></div>
+   <dl class="kv"><dt>90 % interval</dt><dd>${r.lower90.toFixed(1)} – ${r.upper90.toFixed(1)} m</dd>
+   <dt>95 % interval</dt><dd>${r.lower95.toFixed(1)} – ${r.upper95.toFixed(1)} m</dd>
+   ${r.zmax!=null?`<dt>Optical limit</dt><dd>${r.zmax.toFixed(1)} m</dd>`:''}
+   ${r.aleatoric_sd!=null?`<dt>Noise / model σ</dt><dd>${r.aleatoric_sd.toFixed(2)} / ${r.epistemic_sd.toFixed(2)} m</dd>`:''}</dl>`;
+}
+
+async function pointQuery(lng,lat){
+  if(STATIC){
+    const s=STATIC.sites[cur.name], g=s.grid; const [w,so,e,n]=s.bounds;
+    const j=Math.floor((lng-w)/(e-w)*g.nx), i=Math.floor((n-lat)/(n-so)*g.ny);
+    if(i<0||j<0||i>=g.ny||j>=g.nx) return null; const k=i*g.nx+j; if(g.depth[k]==null) return null;
+    const o={}; for(const f of g.fields) o[f]=g[f][k]; return o;
+  }
+  const r=await fetch(`/api/query/point?lon=${lng}&lat=${lat}&site=${cur.name}`); return r.ok?r.json():null;
+}
+
+map.on('click',async e=>{
+  if(drawMode){ verts.push([e.lngLat.lng,e.lngLat.lat]); drawGeom(); return; }
+  readout(await pointQuery(e.lngLat.lng,e.lngLat.lat));
+});
+map.on('dblclick',e=>{ if(drawMode){ e.preventDefault(); finishDraw(); }});
+
+function drawGeom(){
+  const coords = drawMode==='area' && verts.length>2 ? [...verts,verts[0]] : verts;
+  const gj={type:'Feature',geometry:{type:'LineString',coordinates:coords.length>1?coords:[verts[0],verts[0]]}};
+  if(map.getSource('draw')) map.getSource('draw').setData(gj);
+  else { map.addSource('draw',{type:'geojson',data:gj});
+    map.addLayer({id:'draw-line',type:'line',source:'draw',paint:{'line-color':'#B8237A','line-width':3,'line-dasharray':[2,1]}}); }
+}
+function setDraw(mode){
+  drawMode = drawMode===mode?null:mode; verts=[];
+  document.getElementById('drawRoute').setAttribute('aria-pressed',drawMode==='route');
+  document.getElementById('drawArea').setAttribute('aria-pressed',drawMode==='area');
+  map.getCanvas().style.cursor=drawMode?'crosshair':'';
+}
+async function finishDraw(){
+  const mode=drawMode; const pts=verts.slice(); setDraw(mode); drawMode=null; map.getCanvas().style.cursor='';
+  document.getElementById('drawRoute').setAttribute('aria-pressed',false); document.getElementById('drawArea').setAttribute('aria-pressed',false);
+  const draft=+document.getElementById('draft').value, ukc=+document.getElementById('ukc').value;
+  const st=document.getElementById('status');
+  if(mode==='route'&&pts.length>=2){
+    const res = STATIC? staticProfile(pts,draft,ukc) : await (await fetch('/api/query/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({site:cur.name,geometry:{type:'LineString',coordinates:pts},draft_m:draft,ukc_m:ukc})})).json();
+    drawProfile(res,draft+ukc);
+    const s=res.summary; st.innerHTML = s.route_status ? `<b style="color:${s.route_status==='HAZARD'?'var(--C)':'var(--A)'}">${s.route_status==='HAZARD'?'Route crosses '+Math.round(s.hazard_segments_m)+' m of hazard':'Route clear at the 95 % shoal bound'}</b> · ${Math.round(s.length_m)} m long` : 'Route is outside predicted water.';
+  } else if(mode==='area'&&pts.length>=3){
+    if(STATIC){ st.textContent='Area statistics need the API server. Run the full platform to use them.'; return; }
+    const r=await (await fetch('/api/query/polygon',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({site:cur.name,geometry:{type:'Polygon',coordinates:[[...pts,pts[0]]]},draft_m:draft,ukc_m:ukc})})).json();
+    if(!r.cells){st.textContent='No predicted water inside this area.';return;}
+    st.innerHTML=`<div class="metric"><span>Area</span><span>${r.area_km2.toFixed(3)} km²</span></div><div class="metric"><span>Mean depth</span><span>${r.depth_mean.toFixed(1)} m</span></div><div class="metric"><span>Shoalest 95 % bound</span><span>${r.shoalest_lower95.toFixed(1)} m</span></div><div class="metric"><span>Hazard share</span><span>${r.navigation.hazard_pct.toFixed(1)} %</span></div><div class="metric"><span>High-confidence share</span><span>${r.confidence_share_pct['A high'].toFixed(0)} %</span></div>`;
+  }
+}
+function staticProfile(pts,draft,ukc){
+  // densify in lon/lat, sample grid
+  const prof=[]; let L=0; const R=6371000, rad=Math.PI/180; const seg=[];
+  for(let i=1;i<pts.length;i++){const[a,b]=[pts[i-1],pts[i]];const dx=(b[0]-a[0])*rad*R*Math.cos(a[1]*rad),dy=(b[1]-a[1])*rad*R;seg.push(Math.hypot(dx,dy));L+=seg.at(-1);}
+  const N=200; let haz=0;
+  for(let k=0;k<N;k++){ let t=L*k/(N-1), i=0; while(i<seg.length-1&&t>seg[i]){t-=seg[i];i++;} const f=seg[i]?t/seg[i]:0;
+    const p=[pts[i][0]+(pts[i+1][0]-pts[i][0])*f, pts[i][1]+(pts[i+1][1]-pts[i][1])*f];
+    const s=STATIC.sites[cur.name], g=s.grid, [w,so,e,n]=s.bounds; const j=Math.floor((p[0]-w)/(e-w)*g.nx), ii=Math.floor((n-p[1])/(n-so)*g.ny);
+    const rec={distance_m:L*k/(N-1)}; const kk=ii*g.nx+j;
+    if(ii>=0&&j>=0&&ii<g.ny&&j<g.nx&&g.depth[kk]!=null){for(const fld of g.fields) rec[fld]=g[fld][kk]; if(rec.lower95<draft+ukc&&rec.confidence!==4) haz+=L/(N-1);}
+    prof.push(rec);}
+  return {summary:{length_m:L,route_status:haz>0?'HAZARD':'CLEAR',hazard_segments_m:haz},profile:prof};
+}
+function drawProfile(res,lim){
+  const P=document.getElementById('profile'); P.style.display='block';
+  const svg=document.getElementById('profSvg'); const W=svg.clientWidth||800,H=170,m={l:44,r:12,t:8,b:24};
+  const pts=res.profile.filter(p=>p.depth!=null); if(!pts.length){svg.innerHTML='';return;}
+  const Lx=res.summary.length_m||1, maxD=Math.max(lim+2,...pts.map(p=>p.upper95))*1.05;
+  const x=d=>m.l+(W-m.l-m.r)*d/Lx, y=v=>m.t+(H-m.t-m.b)*v/maxD;
+  const band=(lo,hi)=>pts.map(p=>`${x(p.distance_m)},${y(p[lo])}`).join(' ')+' '+pts.slice().reverse().map(p=>`${x(p.distance_m)},${y(p[hi])}`).join(' ');
+  let g=`<polygon points="${band('lower95','upper95')}" fill="#BFDDEA"/><polygon points="${band('lower90','upper90')}" fill="#5E9CC0" opacity=".55"/>`;
+  g+=`<polyline points="${pts.map(p=>`${x(p.distance_m)},${y(p.depth)}`).join(' ')}" fill="none" stroke="#0E3A5B" stroke-width="2"/>`;
+  g+=`<line x1="${m.l}" x2="${W-m.r}" y1="${y(lim)}" y2="${y(lim)}" stroke="#B8237A" stroke-width="1.5" stroke-dasharray="5 3"/><text x="${W-m.r-4}" y="${y(lim)-4}" text-anchor="end" font-size="12" fill="#B8237A">draft + clearance ${lim.toFixed(1)} m</text>`;
+  for(let v=0;v<=maxD;v+=maxD>12?5:2) g+=`<text x="${m.l-6}" y="${y(v)+4}" text-anchor="end" font-size="11" fill="#5B6B76">${v}</text><line x1="${m.l}" x2="${W-m.r}" y1="${y(v)}" y2="${y(v)}" stroke="#C9D6DD" stroke-width=".5"/>`;
+  g+=`<text x="${m.l}" y="${H-6}" font-size="11" fill="#5B6B76">0 m</text><text x="${W-m.r}" y="${H-6}" text-anchor="end" font-size="11" fill="#5B6B76">${Math.round(Lx)} m along route</text>`;
+  svg.innerHTML=g; document.getElementById('profTitle').textContent='Route profile — depth with 90 % and 95 % intervals';
+}
+document.querySelector('#profile .close').onclick=()=>document.getElementById('profile').style.display='none';
+document.getElementById('drawRoute').onclick=()=>setDraw('route');
+document.getElementById('drawArea').onclick=()=>setDraw('area');
+document.getElementById('clearDraw').onclick=()=>{verts=[];if(map.getSource('draw'))map.getSource('draw').setData({type:'FeatureCollection',features:[]});document.getElementById('status').textContent='';document.getElementById('profile').style.display='none';};
+document.querySelectorAll('.layers button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.layers button').forEach(x=>x.setAttribute('aria-pressed',x===b));layer=b.dataset.layer;setOverlay();});
+document.getElementById('opacity').oninput=e=>{if(map.getLayer('ov'))map.setPaintProperty('ov','raster-opacity',+e.target.value);};
+['draft','ukc'].forEach(id=>document.getElementById(id).onchange=()=>{if(layer==='hazard')setOverlay();});
+
+function showMetrics(){
+  const m=cur.metrics||{}; const el=document.getElementById('metrics');
+  if(!m.rmse){el.textContent='No validation metrics for this area.';return;}
+  const rows=[['Reference',cur.meta.reference_type||'–'],['Held-out cells',m.n],['RMSE',m.rmse.toFixed(2)+' m'],['MAE',m.mae.toFixed(2)+' m'],['R²',m.r2!=null?m.r2.toFixed(3):'–'],['Within ±1 m',m.within_1m.toFixed(1)+' %'],['90 % interval coverage',m.picp90!=null?m.picp90.toFixed(1)+' %':'–']];
+  el.innerHTML=rows.map(r=>`<div class="metric"><span>${r[0]}</span><span>${r[1]}</span></div>`).join('')+'<p class="hint" style="margin-top:8px">Spatial-block cross-validation; intervals are split-conformal calibrated on held-out blocks.</p>';
+}
+function selectSite(name){
+  cur=sites.find(s=>s.name===name); const [w,s,e,n]=cur.bounds;
+  map.fitBounds([[w,s],[e,n]],{padding:30,duration:0}); setOverlay(); showMetrics(); readout(undefined);
+  document.getElementById('readout').innerHTML='<p class="hint">Click any water cell to read its depth, interval and confidence.</p>';
+}
+async function init(){
+  const data = STATIC ? STATIC.index : await (await fetch('/api/sites')).json();
+  sites=data.sites; const sel=document.getElementById('site');
+  sel.innerHTML=sites.map(s=>`<option value="${s.name}">${(s.meta.region||s.name)}</option>`).join('');
+  sel.onchange=()=>selectSite(sel.value);
+  map.on('load',()=>selectSite(sites[0].name)); if(map.loaded()) selectSite(sites[0].name);
+}
+init();
+</script>
+</body>
+</html>

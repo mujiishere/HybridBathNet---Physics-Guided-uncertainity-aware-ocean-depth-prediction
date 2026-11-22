@@ -1,0 +1,278 @@
+{
+ "version": "2.0.0",
+ "n_members": 5,
+ "members": [
+  "runs_v2/cv_full/fold0/member0.pt",
+  "runs_v2/cv_full/fold1/member0.pt",
+  "runs_v2/cv_full/fold2/member0.pt",
+  "runs_v2/cv_full/fold3/member0.pt",
+  "runs_v2/cv_full/fold4/member0.pt"
+ ],
+ "calibration": {
+  "method": "cross-conformal on out-of-fold test predictions, Mondrian by site and depth bin",
+  "per_site": {
+   "ponce_pr": {
+    "alphas": [
+     0.32,
+     0.1,
+     0.05
+    ],
+    "bins": [
+     0,
+     5,
+     10,
+     1000000000.0
+    ],
+    "q": {
+     "0.32": [
+      0.8023238182067871,
+      0.8433492183685303,
+      0.8899774551391602
+     ],
+     "0.1": [
+      1.4378280639648438,
+      1.653300166130066,
+      1.5928282737731934
+     ],
+     "0.05": [
+      1.854119062423706,
+      2.1249303817749023,
+      1.9975007772445679
+     ]
+    }
+   },
+   "seribu_id": {
+    "alphas": [
+     0.32,
+     0.1,
+     0.05
+    ],
+    "bins": [
+     0,
+     5,
+     10,
+     1000000000.0
+    ],
+    "q": {
+     "0.32": [
+      0.9007436037063599,
+      1.3392637968063354,
+      0.9231641292572021
+     ],
+     "0.1": [
+      1.5466009378433228,
+      2.4979679584503174,
+      1.6204103231430054
+     ],
+     "0.05": [
+      1.7891238927841187,
+      3.1952106952667236,
+      1.9600399732589722
+     ]
+    }
+   },
+   "langebaan_za": {
+    "alphas": [
+     0.32,
+     0.1,
+     0.05
+    ],
+    "bins": [
+     0,
+     5,
+     10,
+     1000000000.0
+    ],
+    "q": {
+     "0.32": [
+      0.798007071018219,
+      0.798007071018219,
+      0.798007071018219
+     ],
+     "0.1": [
+      1.6686393022537231,
+      1.6686393022537231,
+      1.6686393022537231
+     ],
+     "0.05": [
+      2.504948377609253,
+      2.504948377609253,
+      2.504948377609253
+     ]
+    }
+   },
+   "kerala_in": {
+    "alphas": [
+     0.32,
+     0.1,
+     0.05
+    ],
+    "bins": [
+     0,
+     5,
+     10,
+     1000000000.0
+    ],
+    "q": {
+     "0.32": [
+      0.9412842988967896,
+      1.3814001083374023,
+      0.889724850654602
+     ],
+     "0.1": [
+      1.6699235439300537,
+      1.8133059740066528,
+      1.6193879842758179
+     ],
+     "0.05": [
+      2.116157293319702,
+      1.9232213497161865,
+      2.1173763275146484
+     ]
+    }
+   }
+  },
+  "pooled": {
+   "alphas": [
+    0.32,
+    0.1,
+    0.05
+   ],
+   "bins": [
+    0,
+    5,
+    10,
+    1000000000.0
+   ],
+   "q": {
+    "0.32": [
+     0.8038424253463745,
+     0.8453950881958008,
+     0.8899253010749817
+    ],
+    "0.1": [
+     1.4437086582183838,
+     1.6540446281433105,
+     1.5928282737731934
+    ],
+    "0.05": [
+     1.860330581665039,
+     2.1249303817749023,
+     1.9990800619125366
+    ]
+   }
+  }
+ },
+ "sites": [
+  "ponce_pr",
+  "seribu_id",
+  "langebaan_za",
+  "kerala_in"
+ ],
+ "metrics": {
+  "ponce_pr": {
+   "n": 116845,
+   "rmse": 1.2640294726090096,
+   "mae": 0.8551851526910728,
+   "bias": -0.1428836080339627,
+   "r2": 0.9412153522590165,
+   "within_1m": 70.8322991997946,
+   "within_2m": 89.38165946339167,
+   "picp90": 89.93966365698147,
+   "picp95": 94.78539946082417
+  },
+  "seribu_id": {
+   "n": 403,
+   "rmse": 0.8195780896451984,
+   "mae": 0.5110241014963344,
+   "bias": -0.03839988832734063,
+   "r2": 0.8664976828535975,
+   "within_1m": 84.863523573201,
+   "within_2m": 96.27791563275434,
+   "picp90": 88.83374689826302,
+   "picp95": 93.30024813895783
+  },
+  "langebaan_za": {
+   "n": 475,
+   "rmse": 0.9664827697587239,
+   "mae": 0.5223501727455541,
+   "bias": -0.2397053357174522,
+   "r2": 0.37439334017555115,
+   "within_1m": 84.42105263157896,
+   "within_2m": 97.68421052631578,
+   "picp90": 88.8421052631579,
+   "picp95": 94.3157894736842
+  },
+  "kerala_in": {
+   "n": 819,
+   "rmse": 4.734654338169347,
+   "mae": 3.4347393751435518,
+   "bias": 0.14492981366913252,
+   "r2": 0.2771290886082971,
+   "within_1m": 21.123321123321123,
+   "within_2m": 41.514041514041516,
+   "picp90": 89.37728937728939,
+   "picp95": 94.38339438339437
+  }
+ },
+ "site_meta": {
+  "ponce_pr": {
+   "region": "Ponce, Puerto Rico (Caribbean)",
+   "reference": "NOAA topobathymetric lidar, tide-corrected, 10 m",
+   "reference_type": "lidar",
+   "image_date": "2019-01-08",
+   "atm_correction": "Sen2Cor L2A",
+   "water_type": "clear oceanic / coral-seagrass"
+  },
+  "seribu_id": {
+   "region": "Kepulauan Seribu, Java Sea, Indonesia",
+   "reference": "single-beam echo sounding, tide-corrected (Z_Koreksi)",
+   "reference_type": "sonar",
+   "atm_correction": "L2A",
+   "water_type": "reef lagoon / moderately turbid",
+   "n_points": 10085
+  },
+  "langebaan_za": {
+   "region": "Langebaan Lagoon / Saldanha Bay, South Africa",
+   "reference": "ICESat-2 ATL24 seabed photons (conf>=0.6), depth=-ortho_h",
+   "reference_type": "icesat2_atl24",
+   "image_date": "2024-11-28",
+   "atm_correction": "ACOLITE rhos",
+   "water_type": "temperate lagoon, sand/seagrass",
+   "n_points": 2692
+  },
+  "kerala_in": {
+   "region": "Kerala coast (Alappuzha), India - Arabian Sea",
+   "reference": "ICESat-2 ATL24 V002 official profiles 2018-2024, per-pixel median",
+   "reference_type": "icesat2_atl24",
+   "image_date": "2024-01-13/2024-01-28 median",
+   "atm_correction": "Sen2Cor L2A median of 5 scene-tiles",
+   "water_type": "turbid monsoon-influenced shelf",
+   "n_points": 1538,
+   "qc": "dropped ATL24 depth<3 m where GEBCO>10 m (offshore near-surface false bottoms)",
+   "product_extent": "water within 2.0 km of land"
+  }
+ },
+ "config": {
+  "width": 32,
+  "blocks": 3,
+  "dropout": 0.1,
+  "phys_feat": true,
+  "film": true,
+  "phys_head": true,
+  "uncertainty": true,
+  "lr": 0.002,
+  "wd": 0.0001,
+  "epochs": 25,
+  "steps": 60,
+  "batch": 96,
+  "batch_unl": 64,
+  "patience": 5,
+  "min_epoch_frac": 0.6,
+  "nll_warmup": 4,
+  "beta": 0.5,
+  "w_huber": 1.0,
+  "w_phys": 0.5,
+  "site_power": 0.5
+ }
+}

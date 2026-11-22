@@ -1,5 +1,34 @@
 # HybridBathNet: current project context and handoff
 
+## HybridBathNet v2 — Kerala added, 4-site study (22 November 2026, evening) — CURRENT
+
+User connected `C:\Users\Akash A\final year project\HybridBathNet...` holding the Kerala Sentinel-2 data. Kerala site built by [hbn2/kerala_build.py](hbn2/kerala_build.py) from 5 Jan-2024 L2A tile-scenes (`_hbn2_extract/<date>_<tile>_<band>.jp2`, T43PFK 13/18/28 Jan + T43PFL 18/23 Jan; SCL-masked median, offset 1000) and the recovered ATL24 V002 profiles (runs/2026-11-06/recovery_v2/official_profiles.csv). Label QC, fixed before training: drop ATL24 depth < 3 m where GEBCO > 10 m (99 of 1,637 photons-pixels records); GEBCO is not used as truth. 819 labelled pixels <= 20 m (two-thirds at 15-20 m).
+
+Folder layout: `runs_v2/`, `reports_v2/`, `products_v2/` now hold the **4-site** study (Ponce, Seribu, Langebaan, Kerala); the earlier 3-site study is preserved unchanged in `runs_v2_3site/`, `reports_v2_3site/`, `products_v2_3site/`.
+
+4-site out-of-fold results ([reports_v2/study_metrics.json](reports_v2/study_metrics.json), [significance](reports_v2/significance.json)): RMSE Ponce 1.264 m (CI 1.14-1.39, R² 0.941), Seribu 0.820 (0.40-1.15, R² 0.866), Langebaan 0.966 (0.64-1.34), **Kerala 4.735 (4.27-5.18, R² 0.277)**. Stumpf 3.03 / 1.10 / 1.40 / 4.88; Lyzenga 3.91 / 1.19 / 1.34 / 5.15. v2 beats Stumpf significantly at the three optically shallow sites; at Kerala the 0.14 m gain is n.s. Kerala bins: <10 m labels over-predicted by ~7 m, 15-20 m under-predicted by 2.2 m (regression to the mean; seabed not visible; ATL24 2018-2024 vs Jan-2024 image). Cross-conformal 90/95 % coverage 89.9/94.8, 88.8/93.3, 88.8/94.3, 89.4/94.4 %; Kerala 90 % intervals are 12.4 m wide and 97.7 % of held-out Kerala cells are confidence class C (2.3 % D), so the products flag Kerala as unusable — correct behaviour. Class-A held-out RMSE: Ponce 0.52, Seribu 0.32, Langebaan 0.56 m. Ablations (1 member, matched): full 1.30/0.86/1.08/4.77, no physics loss 1.33/1.01/1.07/5.09, plain CNN 1.38/1.04/1.18/4.94; physics loss significant at Seribu and Kerala, full vs CNN significant at Ponce. Kerala LOSO: zero-shot 6.05 m, physics-adapted 11.54 m. z_max is unreliable at Kerala (median 26 m on a turbid shelf).
+
+Products: Kerala mapped only within 2 km of image-detected land (863,421 cells incl. backwaters) to bound inference cost; PostGIS ingest of all 4 sites verified (1,679,257 cells). Static dashboard republished with Kerala. Manuscript doc updated to 4 sites. No job is running.
+
+## HybridBathNet v2 multi-site study + GIS platform (22 November 2026) — superseded by the 4-site section above for current numbers
+
+User asked to make the project journal-worthy: more/better datasets, higher accuracy, full implementation with GeoTIFF depth/uncertainty maps, GIS dashboard with confidence overlays, PostGIS store and FastAPI service. All v1 code, checkpoints and results are untouched; v2 lives in new directories. See [README_V2.md](README_V2.md).
+
+**Data (independent references, replacing GEBCO-as-truth):** Ponce, Puerto Rico — Sentinel-2 L2A + NOAA topobathy lidar (116,845 labelled 10 m pixels, 0–19.9 m); Kepulauan Seribu, Indonesia — L2A + tide-corrected echo sounding (403 px); Langebaan, South Africa — ACOLITE S2 + ICESat-2 ATL24 (475 px). Open GitHub sources, SHA-256 pinned in [hbn2/download_open_data.py](hbn2/download_open_data.py); harmonised site files in data/v2_sites/*.npz (gitignored). Kerala can be added as a 4th site with the recovered ATL24 V002 profiles via `scripts_v2/run_full_study.ps1` (needs the local stack.tif; not run — the C:\Amrita folder was not accessible to the agent).
+
+**Model:** `hbn2/` — 13×13 patch CNN (78k params, width 32), Lyzenga/Stumpf physics features, FiLM scene conditioning, Maritorena et al. (1994) differentiable reflectance model trained jointly (also on unlabelled water) giving an optical detection limit z_max, heteroscedastic β-NLL, 3-member deep ensemble per fold, Mondrian cross-conformal intervals. Trained on CPU in the agent sandbox.
+
+**Protocol:** 200 m blocks, 5 folds, validation/calibration halves of the next fold, 6-px Chebyshev footprint buffer (unit-tested; an L1-buffer bug was found by the test and fixed before the reported runs), train-only fitting, Stumpf/Lyzenga on identical training pixels.
+
+**Results (out-of-fold, [reports_v2/study_metrics.json](reports_v2/study_metrics.json)):** RMSE Ponce 1.258 m (block-bootstrap CI 1.14–1.39, R² 0.942), Seribu 0.934 m (0.39–1.38), Langebaan 1.003 m (0.70–1.34); Stumpf 3.03/1.10/1.40, Lyzenga 3.91/1.19/1.34. Paired v2−Stumpf differences all exclude zero ([significance.json](reports_v2/significance.json)). Cross-conformal 90/95 % coverage 89.8/94.6, 88.3/93.5, 88.4/94.7 % (v1 was 71 % at 90 %); single-fold split conformal under-covers (78–84 % at 90 %). Ablations (1 member/fold, matched): full 1.28/0.92/0.98, no physics loss 1.32/1.00/0.94, plain CNN 1.31/1.08/1.14 — physics gains are small, mostly n.s., clearer on NLL. LOSO transfer is NOT solved: zero-shot 4.68/4.47/2.06 m; physics-only adaptation 8.94/2.07/2.02 m; 30-sounding Stumpf beats 30-sounding recalibrated v2 at Ponce and Seribu. Do not claim cross-site generalisation.
+
+**Products & platform:** [products_v2/](products_v2/) COGs per site (depth, sigma, aleatoric/epistemic SD, 68/90/95 % bounds, zmax, confidence class A–D) + manifest; deployed ensemble = member0 of each fold (5 nets). `sdb_platform/`: PostGIS schema + ingest (verified on PostgreSQL 16/PostGIS 3.4: 815,836 cells), FastAPI (tiles, point/profile/polygon/navigation, downloads), MapLibre dashboard (rendered in headless Chrome), docker-compose (not run). Static single-file dashboard: reports_v2/dashboard_static.html. Tests: tests/test_hbn2.py + tests/test_platform_api.py, 15 pass (in sandbox; local venv needs the new deps).
+
+**Artifacts:** runs_v2/ (cv_full, loso, abl_cnn_only, abl_no_physics_loss; models gitignored), reports_v2/figures, reports_v2/methods_draft.md. Manuscript draft is a Claude doc (link given in chat). No job is running.
+
+**Next steps:** run `scripts_v2/run_full_study.ps1` on the workstation to add Kerala; MagicBathyNet (Zenodo) as a further test site; per-sensor noise tuning for z_max (conservative in clear water: Ponce cells beyond z_max had 0.85 m RMSE); few-shot fine-tuning for transfer.
+
+
 GitHub publication (7 November 2026): published the accumulated source, experiment protocols, metrics, tests and study reports to origin/main in commit 049dcef (559 files). Raw satellite/tide/photon data, feature arrays, downloaded dependencies, experiment checkpoints, external downloads and logs remain local through .gitignore; existing tracked root checkpoint remains versioned. No training or result recalculation is launched. Checks: staged payload 39.5 MB, no credential-pattern matches, no whitespace errors apart from historical trailing blank lines; Git confirmed main -> main. No training was run for publication.
 
 <!-- OOF_UNCERTAINTY_STATUS -->
@@ -415,3 +444,7 @@ On interrupted runs, inspect `status.json`, logs and any `failure.json` before r
 - 2026-11-05 review: reviewed 19 histories, reproduced sampler coverage, analyzed validation residuals and validation-only two-seed average, generated evidence and curve plot. Added this handoff, REVIEW.md, AGENTS.md maintenance instructions and README status. No new model training or model behavior change during this review.
 
 Future assistants: append dated changes with files, rationale, validation, result provenance, current process status and next actions. Do not erase unsuccessful experiments or convert proposed work into completed claims.
+
+- Nov 22: built HybridBathNet v2 (hbn2/, sdb_platform/, scripts_v2/, tests, runs_v2/, reports_v2/, products_v2/) — 3 open independently-referenced sites, spatial-block CV, ensembles + cross-conformal, LOSO, ablations, COG products, PostGIS/FastAPI/dashboard. v1 artifacts untouched.
+- Nov 22 evening: added Kerala (kerala_build.py), reran 4-site CV/LOSO(Kerala)/ablations into runs_v2; 3-site study moved to *_3site dirs; products/reports/dashboard/manuscript updated.
+- Nov 22 night: prepared repo for push — docs_v2/MANUSCRIPT_DRAFT.md, docs_v2/REPRODUCE.md, requirements_v2.txt; .gitignore now keeps runs_v2*/ models + out-of-fold predictions, ignores COG .tif maps and data/v2_sites. 518 new/changed files, ~60 MB, largest 6 MB.

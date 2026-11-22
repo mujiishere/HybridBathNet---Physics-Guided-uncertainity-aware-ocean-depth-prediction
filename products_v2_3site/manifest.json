@@ -1,0 +1,225 @@
+{
+ "version": "2.0.0",
+ "n_members": 5,
+ "members": [
+  "runs_v2/cv_full/fold0/member0.pt",
+  "runs_v2/cv_full/fold1/member0.pt",
+  "runs_v2/cv_full/fold2/member0.pt",
+  "runs_v2/cv_full/fold3/member0.pt",
+  "runs_v2/cv_full/fold4/member0.pt"
+ ],
+ "calibration": {
+  "method": "cross-conformal on out-of-fold test predictions, Mondrian by site and depth bin",
+  "per_site": {
+   "ponce_pr": {
+    "alphas": [
+     0.32,
+     0.1,
+     0.05
+    ],
+    "bins": [
+     0,
+     5,
+     10,
+     1000000000.0
+    ],
+    "q": {
+     "0.32": [
+      0.7596173882484436,
+      0.8667702674865723,
+      0.9645389914512634
+     ],
+     "0.1": [
+      1.3773672580718994,
+      1.626137137413025,
+      1.7987096309661865
+     ],
+     "0.05": [
+      1.809760332107544,
+      2.1567044258117676,
+      2.3112306594848633
+     ]
+    }
+   },
+   "seribu_id": {
+    "alphas": [
+     0.32,
+     0.1,
+     0.05
+    ],
+    "bins": [
+     0,
+     5,
+     10,
+     1000000000.0
+    ],
+    "q": {
+     "0.32": [
+      1.0704599618911743,
+      1.3773671388626099,
+      1.0804353952407837
+     ],
+     "0.1": [
+      1.7824431657791138,
+      4.333069324493408,
+      1.9043852090835571
+     ],
+     "0.05": [
+      2.106478214263916,
+      4.985380172729492,
+      2.2471888065338135
+     ]
+    }
+   },
+   "langebaan_za": {
+    "alphas": [
+     0.32,
+     0.1,
+     0.05
+    ],
+    "bins": [
+     0,
+     5,
+     10,
+     1000000000.0
+    ],
+    "q": {
+     "0.32": [
+      0.8928787112236023,
+      0.8964139223098755,
+      0.8964139223098755
+     ],
+     "0.1": [
+      1.8726578950881958,
+      1.8883657455444336,
+      1.8883657455444336
+     ],
+     "0.05": [
+      2.4180026054382324,
+      2.4180026054382324,
+      2.4180026054382324
+     ]
+    }
+   }
+  },
+  "pooled": {
+   "alphas": [
+    0.32,
+    0.1,
+    0.05
+   ],
+   "bins": [
+    0,
+    5,
+    10,
+    1000000000.0
+   ],
+   "q": {
+    "0.32": [
+     0.7677959203720093,
+     0.8673316836357117,
+     0.9645389914512634
+    ],
+    "0.1": [
+     1.3952606916427612,
+     1.6280661821365356,
+     1.7987096309661865
+    ],
+    "0.05": [
+     1.8362957239151,
+     2.1598739624023438,
+     2.3112306594848633
+    ]
+   }
+  }
+ },
+ "sites": [
+  "ponce_pr",
+  "seribu_id",
+  "langebaan_za"
+ ],
+ "metrics": {
+  "ponce_pr": {
+   "n": 116845,
+   "rmse": 1.2575283949773501,
+   "mae": 0.8533975306619624,
+   "bias": -0.15448023695666088,
+   "r2": 0.941818472371121,
+   "within_1m": 70.99148444520519,
+   "within_2m": 89.47751294449913,
+   "picp90": 89.84894518379049,
+   "picp95": 94.6339167272883
+  },
+  "seribu_id": {
+   "n": 403,
+   "rmse": 0.9340059484809163,
+   "mae": 0.5462178790539725,
+   "bias": -0.17821642039135727,
+   "r2": 0.8266166424342125,
+   "within_1m": 84.61538461538461,
+   "within_2m": 96.7741935483871,
+   "picp90": 88.33746898263027,
+   "picp95": 93.54838709677419
+  },
+  "langebaan_za": {
+   "n": 475,
+   "rmse": 1.0025958194209177,
+   "mae": 0.5884123465889378,
+   "bias": -0.32101656411823476,
+   "r2": 0.32676775263354396,
+   "within_1m": 80.42105263157895,
+   "within_2m": 97.26315789473684,
+   "picp90": 88.42105263157895,
+   "picp95": 94.73684210526315
+  }
+ },
+ "site_meta": {
+  "ponce_pr": {
+   "region": "Ponce, Puerto Rico (Caribbean)",
+   "reference": "NOAA topobathymetric lidar, tide-corrected, 10 m",
+   "reference_type": "lidar",
+   "image_date": "2019-01-08",
+   "atm_correction": "Sen2Cor L2A",
+   "water_type": "clear oceanic / coral-seagrass"
+  },
+  "seribu_id": {
+   "region": "Kepulauan Seribu, Java Sea, Indonesia",
+   "reference": "single-beam echo sounding, tide-corrected (Z_Koreksi)",
+   "reference_type": "sonar",
+   "atm_correction": "L2A",
+   "water_type": "reef lagoon / moderately turbid",
+   "n_points": 10085
+  },
+  "langebaan_za": {
+   "region": "Langebaan Lagoon / Saldanha Bay, South Africa",
+   "reference": "ICESat-2 ATL24 seabed photons (conf>=0.6), depth=-ortho_h",
+   "reference_type": "icesat2_atl24",
+   "image_date": "2024-11-28",
+   "atm_correction": "ACOLITE rhos",
+   "water_type": "temperate lagoon, sand/seagrass",
+   "n_points": 2692
+  }
+ },
+ "config": {
+  "width": 32,
+  "blocks": 3,
+  "dropout": 0.1,
+  "phys_feat": true,
+  "film": true,
+  "phys_head": true,
+  "uncertainty": true,
+  "lr": 0.002,
+  "wd": 0.0001,
+  "epochs": 25,
+  "steps": 60,
+  "batch": 96,
+  "batch_unl": 64,
+  "patience": 5,
+  "min_epoch_frac": 0.6,
+  "nll_warmup": 4,
+  "beta": 0.5,
+  "w_huber": 1.0,
+  "w_phys": 0.5,
+  "site_power": 0.5
+ }
+}

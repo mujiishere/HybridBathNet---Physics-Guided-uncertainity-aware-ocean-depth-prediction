@@ -1,0 +1,14 @@
+{
+ "config": "full",
+ "cfg": {
+  "epochs": 25
+ },
+ "sites": [
+  "ponce_pr",
+  "seribu_id",
+  "langebaan_za",
+  "kerala_in"
+ ],
+ "k": 5,
+ "members": 3
+}

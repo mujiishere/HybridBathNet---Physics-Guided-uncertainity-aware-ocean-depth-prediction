@@ -1,0 +1,112 @@
+/home/claude/hbn/hbn2/physics.py:48: RankWarning: Polyfit may be poorly conditioned
+  b = float(np.polyfit(nir[ok], v[ok], 1)[0])
+/home/claude/hbn/hbn2/physics.py:48: RankWarning: Polyfit may be poorly conditioned
+  b = float(np.polyfit(nir[ok], v[ok], 1)[0])
+/home/claude/hbn/hbn2/physics.py:48: RankWarning: Polyfit may be poorly conditioned
+  b = float(np.polyfit(nir[ok], v[ok], 1)[0])
+{
+ "ponce_pr": {
+  "ensemble_vs_stumpf": {
+   "diff": -1.7618373614397402,
+   "ci95": [
+    -1.967826763506452,
+    -1.5725836593300646
+   ],
+   "p_a_not_better": 0.0
+  },
+  "full1_vs_cnn_only": {
+   "diff": -0.08439350128173828,
+   "ci95": [
+    -0.15196312963962555,
+    -0.017522532492876053
+   ],
+   "p_a_not_better": 0.008
+  },
+  "full1_vs_no_physics_loss": {
+   "diff": -0.026319146156311035,
+   "ci95": [
+    -0.10477478802204132,
+    0.04621615260839462
+   ],
+   "p_a_not_better": 0.2465
+  }
+ },
+ "seribu_id": {
+  "ensemble_vs_stumpf": {
+   "diff": -0.2767374465756902,
+   "ci95": [
+    -0.49257875767981835,
+    -0.07808651668031028
+   ],
+   "p_a_not_better": 0.004
+  },
+  "full1_vs_cnn_only": {
+   "diff": -0.18104016780853271,
+   "ci95": [
+    -0.36583542823791504,
+    0.14027193188667297
+   ],
+   "p_a_not_better": 0.1865
+  },
+  "full1_vs_no_physics_loss": {
+   "diff": -0.15475833415985107,
+   "ci95": [
+    -0.3066927492618561,
+    -0.00554579496383667
+   ],
+   "p_a_not_better": 0.021
+  }
+ },
+ "langebaan_za": {
+  "ensemble_vs_stumpf": {
+   "diff": -0.43306428382587514,
+   "ci95": [
+    -0.7571101124469909,
+    -0.1106726390594991
+   ],
+   "p_a_not_better": 0.0045
+  },
+  "full1_vs_cnn_only": {
+   "diff": -0.09933722019195557,
+   "ci95": [
+    -0.2295239120721817,
+    0.021278947591781616
+   ],
+   "p_a_not_better": 0.052
+  },
+  "full1_vs_no_physics_loss": {
+   "diff": 0.0027741193771362305,
+   "ci95": [
+    -0.12938572466373444,
+    0.1248902827501297
+   ],
+   "p_a_not_better": 0.5095
+  }
+ },
+ "kerala_in": {
+  "ensemble_vs_stumpf": {
+   "diff": -0.14056815573208414,
+   "ci95": [
+    -0.49982498595272884,
+    0.22217276890439927
+   ],
+   "p_a_not_better": 0.217
+  },
+  "full1_vs_cnn_only": {
+   "diff": -0.17271947860717773,
+   "ci95": [
+    -0.6188406944274902,
+    0.24097375571727753
+   ],
+   "p_a_not_better": 0.213
+  },
+  "full1_vs_no_physics_loss": {
+   "diff": -0.3243985176086426,
+   "ci95": [
+    -0.6266796588897705,
+    -0.006719029042869806
+   ],
+   "p_a_not_better": 0.022
+  }
+ }
+}

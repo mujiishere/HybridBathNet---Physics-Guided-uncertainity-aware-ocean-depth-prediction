@@ -1,0 +1,22 @@
+## 2. Data
+
+Three open coastal sites with independent reference bathymetry were harmonised to Sentinel-2 blue, green, red and NIR surface reflectance on 10 m projected grids (hbn2/sites.py). Ponce, Puerto Rico (Caribbean, clear water, coral/seagrass) pairs a 8 January 2019 Sen2Cor L2A scene with tide-corrected NOAA topobathymetric lidar resampled to 10 m (Lumban-Gaol et al., 2022): 116,845 labelled water pixels, 0–19.9 m. Kepulauan Seribu, Indonesia (Java Sea reef lagoon) pairs an L2A scene with 10,085 tide-corrected single-beam echo-sounding points aggregated by per-pixel median into 403 labelled pixels (0.6–11.5 m). Langebaan Lagoon / Saldanha Bay, South Africa (temperate lagoon) pairs an ACOLITE-corrected 28 November 2024 scene with ICESat-2 ATL24 seabed photons (class 40, confidence ≥ 0.6, depth = −orthometric height) aggregated into 475 labelled pixels (0.7–10.8 m). Water masks use imagery only (NDWI > 0, NIR < 0.08). Depths deeper than 20 m are excluded from training and scoring.
+
+## 3. Method
+
+### 3.1 Image-only scene preprocessing
+Sun glint is removed by Hedley et al. (2005) regression of each visible band on NIR over the darkest 10 % of water pixels. Deep-water reflectance R∞ is the 2nd percentile of low-glint water pixels; a 16-value water-type descriptor (5/25/50/95th percentiles of log reflectance per band) characterises each scene. None of these steps reads reference depths.
+
+### 3.2 Network
+HybridBathNet v2 maps a 13 × 13 pixel patch to the depth of its centre. A parameter-free physics layer appends Lyzenga log-transforms ln(Rᵢ − R∞ᵢ), deep-water-relative log reflectance, the Stumpf log-ratio and B/G, G/R log-ratios to the log reflectance and the water mask (15 channels). Three residual convolution blocks (width 32, GroupNorm, GELU, spatial dropout 0.1) are modulated by FiLM parameters predicted from the scene descriptor and R∞. Centre and masked-context features feed a head that outputs mean depth μ (softplus), aleatoric variance σ²ₐ (softplus), and four optical parameters: non-water attenuation K0, bottom albedo, sand/vegetation fraction and a radiometric gain.
+
+### 3.3 Physics-guided objective
+The optical parameters and μ drive the Maritorena, Morel and Gentili (1994) shallow-water model R(λ) = R∞(λ) + (A_b(λ) − R∞(λ)) exp(−2K_d(λ)z), with K_d = K_w(λ) + K0·s(λ), pure-water K_w at the Sentinel-2 bands and a two-endmember bottom albedo. The training loss is
+L = Huber(μ, y) + w(t)·β-NLL(μ, σ²ₐ, y; β = 0.5) + 0.5·Huber(ln R̂, ln R),
+where the reflectance reconstruction term is evaluated on labelled pixels and on an equal-size stream of unlabelled water pixels; w(t) ramps the NLL in over four epochs. The model also returns an optical detection limit z_max = maxλ ln(|A_b − R∞|/ε_λ)/(2K_d), with ε the effective radiometric noise.
+
+### 3.4 Uncertainty and calibration
+Each configuration is trained as a deep ensemble (three members per fold, different seeds). Predictive variance is σ² = mean(σ²ₐ) + Var(μ). Intervals are produced by normalised conformal prediction with Mondrian classes by site and predicted-depth bin (0–5, 5–10, > 10 m): score s = |y − μ|/σ, interval μ ± q̂₁₋α σ with the finite-sample quantile. The primary evaluation uses cross-conformal calibration, where scores come from out-of-fold predictions of the other four spatial folds; a single held-out calibration fold (split conformal) is reported for comparison. Pixels are classed A (90 % half-width ≤ 1 m), B (≤ 2 m), C (wider) or D (μ > z_max or > 20 m).
+
+### 3.5 Evaluation protocol
+Each site is tiled into 200 m blocks assigned to five folds. For test fold f, fold f+1 is split block-wise into validation (early stopping, minimum 60 % of the 25-epoch one-cycle schedule) and calibration halves; training centres within a 6-pixel Chebyshev buffer of any held-out pixel are removed so no training patch overlaps a held-out centre. Feature normalisation, Stumpf (2003) and Lyzenga (1985/2006) baselines are fitted on the same training pixels. Accuracy metrics: RMSE with 95 % spatial-block bootstrap intervals, MAE, bias, NMAD, R², share within ±0.5/1/2 m, and share within the IHO S-44 Order 2 total vertical uncertainty. Uncertainty metrics: NLL, CRPS, Gaussian calibration error, interval coverage and width, Spearman correlation of σ with |error|, and area under the sparsification error curve. Transfer is assessed by leave-one-site-out training, zero-shot and with physics-only adaptation on unlabelled target imagery, plus 30-sounding linear recalibration versus a Stumpf model fitted on the same 30 soundings.

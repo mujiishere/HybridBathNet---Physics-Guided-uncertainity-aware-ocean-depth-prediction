@@ -58,3 +58,11 @@ runs/**/*.log
 runs/**/external/
 runs/**/features/*_pixels.csv
 runs/**/original/
+
+# HybridBathNet v2: keep small trained members (*.pt) and out-of-fold predictions (*.npz) under runs_v2*/
+# so every table can be re-derived; COG maps (*.tif) and harmonised site files (data/v2_sites/*.npz) stay local.
+!runs_v2/**/*.npz
+!runs_v2_3site/**/*.npz
+data/v2_raw/
+data/v2_sites/
+reports_v2_3site/dashboard_static.html

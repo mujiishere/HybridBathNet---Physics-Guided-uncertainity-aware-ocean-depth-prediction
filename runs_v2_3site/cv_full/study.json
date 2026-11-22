@@ -1,0 +1,13 @@
+{
+ "config": "full",
+ "cfg": {
+  "epochs": 25
+ },
+ "sites": [
+  "ponce_pr",
+  "seribu_id",
+  "langebaan_za"
+ ],
+ "k": 5,
+ "members": 3
+}

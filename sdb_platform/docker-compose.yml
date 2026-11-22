@@ -1,0 +1,40 @@
+# HybridBathNet v2 GIS platform: PostGIS + FastAPI (serves dashboard, tiles and planner queries)
+# Usage (from the repository root):
+#   python -m hbn2.make_products            # writes products_v2/ (COGs + manifest)
+#   docker compose -f sdb_platform/docker-compose.yml up --build
+#   open http://localhost:8000
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: sdb
+      POSTGRES_PASSWORD: ${SDB_DB_PASSWORD:-sdb}
+      POSTGRES_DB: sdb
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sdb"]
+      interval: 5s
+      retries: 20
+
+  ingest:
+    build: {context: .., dockerfile: sdb_platform/Dockerfile}
+    depends_on: {db: {condition: service_healthy}}
+    environment:
+      HBN_DSN: postgresql://sdb:${SDB_DB_PASSWORD:-sdb}@db:5432/sdb
+    volumes: ["../products_v2:/app/products_v2:ro", "../data/v2_sites:/app/data/v2_sites:ro"]
+    command: python sdb_platform/db/ingest.py --dsn postgresql://sdb:${SDB_DB_PASSWORD:-sdb}@db:5432/sdb --products products_v2 --sites data/v2_sites
+    restart: "no"
+
+  api:
+    build: {context: .., dockerfile: sdb_platform/Dockerfile}
+    depends_on: {db: {condition: service_healthy}}
+    environment:
+      HBN_DSN: postgresql://sdb:${SDB_DB_PASSWORD:-sdb}@db:5432/sdb
+      HBN_PRODUCTS: /app/products_v2
+    volumes: ["../products_v2:/app/products_v2:ro"]
+    ports: ["8000:8000"]
+    command: uvicorn sdb_platform.api.main:app --host 0.0.0.0 --port 8000
+
+volumes:
+  pgdata:

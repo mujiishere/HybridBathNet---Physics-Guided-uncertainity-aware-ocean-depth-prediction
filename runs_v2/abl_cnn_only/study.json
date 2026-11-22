@@ -1,0 +1,18 @@
+{
+ "config": "cnn_only",
+ "cfg": {
+  "w_phys": 0.0,
+  "phys_head": false,
+  "phys_feat": false,
+  "film": false,
+  "epochs": 25
+ },
+ "sites": [
+  "ponce_pr",
+  "seribu_id",
+  "langebaan_za",
+  "kerala_in"
+ ],
+ "k": 5,
+ "members": 1
+}

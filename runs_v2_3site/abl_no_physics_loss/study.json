@@ -1,0 +1,15 @@
+{
+ "config": "no_physics_loss",
+ "cfg": {
+  "w_phys": 0.0,
+  "phys_head": false,
+  "epochs": 25
+ },
+ "sites": [
+  "ponce_pr",
+  "seribu_id",
+  "langebaan_za"
+ ],
+ "k": 5,
+ "members": 1
+}
